@@ -1,0 +1,11 @@
+ignore:
+  # Ignore commands (examples or internal utilities).
+  - "cmd/*/*.go"
+  - "**/cmd/*/*.go"
+  # Ignore examples
+  - "examples/**"
+
+coverage:
+  status:
+    project: false
+    patch: false
