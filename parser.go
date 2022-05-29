@@ -8,21 +8,16 @@ import (
 	"github.com/go-faster/errors"
 )
 
-// ReferenceResolver resolves JSON schema references.
-type ReferenceResolver interface {
-	ResolveReference(ref string) (RawSchema, error)
-}
-
-// Parser parses JSON schemas.
-type Parser struct {
-	resolver ReferenceResolver
+// parser parses JSON schemas.
+type parser struct {
+	resolver rootResolver
 	refcache map[string]*Schema
 }
 
-// NewParser creates new Parser.
-func NewParser(resolver ReferenceResolver) *Parser {
-	return &Parser{
-		resolver: resolver,
+// newParser creates new parser.
+func newParser(root []byte) *parser {
+	return &parser{
+		resolver: rootResolver(root),
 		refcache: map[string]*Schema{},
 	}
 }
@@ -30,11 +25,11 @@ func NewParser(resolver ReferenceResolver) *Parser {
 // Parse parses given RawSchema and returns parsed Schema.
 //
 // Do not modify RawSchema fields, Schema will reference them.
-func (p *Parser) Parse(schema RawSchema) (*Schema, error) {
+func (p *parser) Parse(schema RawSchema) (*Schema, error) {
 	return p.parse(schema, resolveCtx{})
 }
 
-func (p *Parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) {
+func (p *parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) {
 	if ref := schema.Ref; ref != "" {
 		s, err := p.resolve(ref, ctx)
 		if err != nil {
@@ -193,7 +188,7 @@ func (p *Parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) 
 	return s, nil
 }
 
-func (p *Parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, error) {
+func (p *parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, error) {
 	result := make([]*Schema, 0, len(schemas))
 	for i, schema := range schemas {
 		s, err := p.parse(schema, ctx)
@@ -209,7 +204,7 @@ func (p *Parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, erro
 
 type resolveCtx map[string]struct{}
 
-func (p *Parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
+func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
 	if s, ok := p.refcache[ref]; ok {
 		return s, nil
 	}

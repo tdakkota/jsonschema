@@ -28,14 +28,6 @@ type Test struct {
 }
 
 func runTests(t *testing.T, tests []Test) {
-	parse := func(data []byte) (*Schema, error) {
-		var raw RawSchema
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, err
-		}
-		return NewParser(rootResolver(data)).Parse(raw)
-	}
-
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
@@ -43,7 +35,7 @@ func runTests(t *testing.T, tests []Test) {
 				cse := cse
 				t.Run(fmt.Sprintf("Case%d", i+1), func(t *testing.T) {
 					a := require.New(t)
-					sch, err := parse(test.Schema)
+					sch, err := Parse(test.Schema)
 					if err != nil {
 						t.Skip(err)
 						return
