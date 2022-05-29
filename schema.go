@@ -92,19 +92,20 @@ func (s *Schema) Validate(data []byte) error {
 		return errors.Wrap(d.Validate(), "invalid json")
 	}
 
-	for _, m := range []struct {
-		name string
-		f    func([]byte) error
-	}{
-		{"enum", s.validateEnum},
-		{"allOf", s.validateAllOf},
-		{"oneOf", s.validateOneOf},
-		{"anyOf", s.validateAnyOf},
-		{"not", s.validateNot},
-	} {
-		if err := m.f(data); err != nil {
-			return errors.Wrap(err, m.name)
-		}
+	if err := s.validateEnum(data); err != nil {
+		return errors.Wrap(err, "enum")
+	}
+	if err := s.validateAllOf(data); err != nil {
+		return errors.Wrap(err, "allOf")
+	}
+	if err := s.validateOneOf(data); err != nil {
+		return errors.Wrap(err, "oneOf")
+	}
+	if err := s.validateAnyOf(data); err != nil {
+		return errors.Wrap(err, "anyOf")
+	}
+	if err := s.validateNot(data); err != nil {
+		return errors.Wrap(err, "not")
 	}
 
 	typem := map[jx.Type]func(d *jx.Decoder) error{
