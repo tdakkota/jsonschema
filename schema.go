@@ -82,8 +82,10 @@ type Schema struct {
 
 // Validate validates given data.
 func (s *Schema) Validate(data []byte) error {
+	d := jx.GetDecoder()
+	defer jx.PutDecoder(d)
 	// TODO: do not stop early, collect errors instead.
-	d := jx.DecodeBytes(data)
+	d.ResetBytes(data)
 
 	tt := d.Next()
 	if tt == jx.Invalid {
