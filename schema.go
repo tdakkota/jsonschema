@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
+
+	"github.com/tdakkota/jsonschema/internal/jsonequal"
 )
 
 type patternProperty struct {
@@ -126,7 +128,7 @@ func (s *Schema) validateEnum(data []byte) error {
 		return nil
 	}
 	for _, variant := range s.enum {
-		ok, err := Equal(variant, data)
+		ok, err := jsonequal.Equal(variant, data)
 		if err != nil {
 			return errors.Wrap(err, "compare")
 		}
@@ -350,7 +352,7 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 				if xi == yi {
 					continue
 				}
-				if ok, _ := Equal(x, y); ok {
+				if ok, _ := jsonequal.Equal(x, y); ok {
 					return errors.Errorf("items %d and %d are equal", xi, yi)
 				}
 			}
