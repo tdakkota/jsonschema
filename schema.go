@@ -390,10 +390,13 @@ func (s *Schema) validateObject(d *jx.Decoder) error {
 	}
 	var (
 		i        = 0
-		required = make(map[string]struct{}, 16)
+		required map[string]struct{}
 	)
-	for k := range s.required {
-		required[k] = struct{}{}
+	if len(s.required) > 0 {
+		required = make(map[string]struct{}, len(s.required))
+		for k := range s.required {
+			required[k] = struct{}{}
+		}
 	}
 	for iter.Next() {
 		k := iter.Key()
