@@ -108,22 +108,27 @@ func (s *Schema) Validate(data []byte) error {
 		return errors.Wrap(err, "not")
 	}
 
-	typem := map[jx.Type]func(d *jx.Decoder) error{
-		jx.String: s.validateString,
-		jx.Number: s.validateNumber,
-		jx.Null:   s.validateNull,
-		jx.Bool:   s.validateBool,
-		jx.Array:  s.validateArray,
-		jx.Object: s.validateObject,
+	var err error
+	switch tt {
+	case jx.String:
+		err = s.validateString(d)
+	case jx.Number:
+		err = s.validateNumber(d)
+	case jx.Null:
+		err = s.validateNull(d)
+	case jx.Bool:
+		err = s.validateBool(d)
+	case jx.Array:
+		err = s.validateArray(d)
+	case jx.Object:
+		err = s.validateObject(d)
+	default:
+		panic(fmt.Sprintf("unreachable: %q", tt))
 	}
-	f, ok := typem[tt]
-	if ok {
-		if err := f(d); err != nil {
-			return errors.Wrap(err, tt.String())
-		}
-		return nil
+	if err != nil {
+		return errors.Wrap(err, tt.String())
 	}
-	panic(fmt.Sprintf("unreachable: %q", tt))
+	return nil
 }
 
 func (s *Schema) validateEnum(data []byte) error {
