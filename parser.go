@@ -44,7 +44,7 @@ func (p *parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) 
 	}
 
 	s := &Schema{
-		types:                schema.Type,
+		types:                typeSet(0).set(schema.Type),
 		format:               schema.Format,
 		enum:                 schema.Enum,
 		allOf:                nil,
