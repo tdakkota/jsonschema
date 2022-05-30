@@ -4,7 +4,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"path"
 	"strings"
 	"testing"
@@ -67,18 +66,6 @@ func runTests(t *testing.T, tests []Test) {
 	}
 }
 
-func mustDir(t require.TestingT, fsys embed.FS, p string) []fs.DirEntry {
-	entries, err := fsys.ReadDir(p)
-	require.NoError(t, err)
-	return entries
-}
-
-func mustFile(t require.TestingT, fsys embed.FS, p string) []byte {
-	entries, err := fsys.ReadFile(p)
-	require.NoError(t, err)
-	return entries
-}
-
 func TestJSONSchemaSuite(t *testing.T) {
 	suiteRoot := path.Join("_testdata", "suite")
 	drafts := mustDir(t, suite, suiteRoot)
@@ -93,6 +80,7 @@ func TestJSONSchemaSuite(t *testing.T) {
 				"id":           {},
 				"definitions":  {},
 				"dependencies": {},
+				"format":       {},
 				"refRemote":    {},
 			}
 
@@ -113,29 +101,5 @@ func TestJSONSchemaSuite(t *testing.T) {
 				})
 			}
 		})
-	}
-}
-
-var (
-	//go:embed _bench/geojson.json
-	benchSchema []byte
-	//go:embed _bench/canada.json
-	benchData []byte
-)
-
-func BenchmarkValidate(b *testing.B) {
-	sch, err := Parse(benchSchema)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.SetBytes(int64(len(benchData)))
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		if err := sch.Validate(benchData); err != nil {
-			b.Fatal(err)
-		}
 	}
 }

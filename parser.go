@@ -44,7 +44,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 
 	if f := schema.Format; f != "" {
 		// TODO: support format validation
-		return nil, errors.Errorf("unsupported format %q", f)
+		schema.Format = ""
 	}
 
 	s := &Schema{
