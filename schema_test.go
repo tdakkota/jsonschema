@@ -9,11 +9,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-faster/errors"
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed _testdata
-var suite embed.FS
+var (
+	//go:embed _testdata
+	suite embed.FS
+
+	//go:embed _draft/draft4.json
+	draft4Raw []byte
+	draft4    = errors.Must(Parse(draft4Raw))
+)
 
 type Case struct {
 	Description string          `json:"description"`
@@ -31,6 +38,8 @@ func runTests(t *testing.T, tests []Test) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			require.NoError(t, draft4.Validate(test.Schema))
+
 			sch, err := Parse(test.Schema)
 			if err != nil {
 				t.Skipf("Schema: %s,\nError: %s", test.Schema, err)
