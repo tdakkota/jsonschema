@@ -17,26 +17,40 @@ func (s *Schema) Validate(data []byte) error {
 	defer jx.PutDecoder(d)
 	// TODO: do not stop early, collect errors instead.
 	d.ResetBytes(data)
+	return s.validate(d)
+}
 
+func (s *Schema) validate(d *jx.Decoder) error {
 	tt := d.Next()
 	if tt == jx.Invalid {
 		return errors.Wrap(d.Validate(), "invalid json")
 	}
 
-	if err := s.validateEnum(data); err != nil {
-		return errors.Wrap(err, "enum")
-	}
-	if err := s.validateAllOf(data); err != nil {
-		return errors.Wrap(err, "allOf")
-	}
-	if err := s.validateOneOf(data); err != nil {
-		return errors.Wrap(err, "oneOf")
-	}
-	if err := s.validateAnyOf(data); err != nil {
-		return errors.Wrap(err, "anyOf")
-	}
-	if err := s.validateNot(data); err != nil {
-		return errors.Wrap(err, "not")
+	if len(s.enum) > 0 || len(s.allOf) > 0 || len(s.oneOf) > 0 || len(s.anyOf) > 0 || s.not != nil {
+		data, err := d.Raw()
+		if err != nil {
+			return errors.Wrap(err, "invalid json")
+		}
+
+		d = jx.GetDecoder()
+		defer jx.PutDecoder(d)
+		d.ResetBytes(data)
+
+		if err := s.validateEnum(data); err != nil {
+			return errors.Wrap(err, "enum")
+		}
+		if err := s.validateAllOf(data); err != nil {
+			return errors.Wrap(err, "allOf")
+		}
+		if err := s.validateOneOf(data); err != nil {
+			return errors.Wrap(err, "oneOf")
+		}
+		if err := s.validateAnyOf(data); err != nil {
+			return errors.Wrap(err, "anyOf")
+		}
+		if err := s.validateNot(data); err != nil {
+			return errors.Wrap(err, "not")
+		}
 	}
 
 	var err error
@@ -79,8 +93,12 @@ func (s *Schema) validateEnum(data []byte) error {
 }
 
 func (s *Schema) validateAllOf(data []byte) error {
+	d := jx.GetDecoder()
+	defer jx.PutDecoder(d)
+
 	for i, schema := range s.allOf {
-		if err := schema.Validate(data); err != nil {
+		d.ResetBytes(data)
+		if err := schema.validate(d); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
 		}
 	}
@@ -91,9 +109,14 @@ func (s *Schema) validateOneOf(data []byte) error {
 	if len(s.oneOf) == 0 {
 		return nil
 	}
+
+	d := jx.GetDecoder()
+	defer jx.PutDecoder(d)
+
 	counter := 0
 	for _, schema := range s.oneOf {
-		if err := schema.Validate(data); err == nil {
+		d.ResetBytes(data)
+		if err := schema.validate(d); err == nil {
 			if counter != 0 {
 				return errors.New("must match exactly once")
 			}
@@ -110,8 +133,13 @@ func (s *Schema) validateAnyOf(data []byte) error {
 	if len(s.anyOf) == 0 {
 		return nil
 	}
+
+	d := jx.GetDecoder()
+	defer jx.PutDecoder(d)
+
 	for _, schema := range s.anyOf {
-		if err := schema.Validate(data); err == nil {
+		d.ResetBytes(data)
+		if err := schema.validate(d); err == nil {
 			return nil
 		}
 	}
@@ -260,21 +288,28 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 
 		if sch != nil || s.uniqueItems {
 			if err := func() error {
-				raw, err := d.Raw()
-				if err != nil {
-					return errors.Wrap(err, "parse JSON")
-				}
+				switch {
+				case sch != nil && s.uniqueItems:
+					raw, err := d.Raw()
+					if err != nil {
+						return errors.Wrap(err, "parse JSON")
+					}
+					items = append(items, raw)
 
-				if sch != nil {
 					if err := sch.Validate(raw); err != nil {
 						return err
 					}
-				}
-
-				if s.uniqueItems {
+				case s.uniqueItems:
+					raw, err := d.Raw()
+					if err != nil {
+						return errors.Wrap(err, "parse JSON")
+					}
 					items = append(items, raw)
+				case sch != nil:
+					if err := sch.validate(d); err != nil {
+						return err
+					}
 				}
-
 				return nil
 			}(); err != nil {
 				return errors.Wrapf(err, "[%d]", i)
