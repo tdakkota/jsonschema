@@ -31,15 +31,15 @@ func runTests(t *testing.T, tests []Test) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			sch, err := Parse(test.Schema)
+			if err != nil {
+				t.Skipf("Schema: %s,\nError: %s", test.Schema, err)
+				return
+			}
 			for i, cse := range test.Tests {
 				cse := cse
 				t.Run(fmt.Sprintf("Case%d", i+1), func(t *testing.T) {
 					a := require.New(t)
-					sch, err := Parse(test.Schema)
-					if err != nil {
-						t.Skip(err)
-						return
-					}
 
 					f := "Schema: %s,\nData: %s,\nDescription: %s"
 					args := []interface{}{
@@ -58,16 +58,27 @@ func runTests(t *testing.T, tests []Test) {
 	}
 }
 
-func TestJSONSchemaSuite(t *testing.T) {
-	drafts, err := fs.ReadDir(suite, "_testdata")
+func mustDir(t require.TestingT, fsys embed.FS, p string) []fs.DirEntry {
+	entries, err := fsys.ReadDir(p)
 	require.NoError(t, err)
+	return entries
+}
+
+func mustFile(t require.TestingT, fsys embed.FS, p string) []byte {
+	entries, err := fsys.ReadFile(p)
+	require.NoError(t, err)
+	return entries
+}
+
+func TestJSONSchemaSuite(t *testing.T) {
+	suiteRoot := path.Join("_testdata", "suite")
+	drafts := mustDir(t, suite, suiteRoot)
 
 	for _, draft := range drafts {
 		draftName := draft.Name()
 		t.Run(draftName, func(t *testing.T) {
-			p := path.Join("_testdata", draftName)
-			sets, err := fs.ReadDir(suite, p)
-			require.NoError(t, err)
+			draftPath := path.Join(suiteRoot, draftName)
+			sets := mustDir(t, suite, draftPath)
 
 			skipSet := map[string]struct{}{
 				"id":           {},
@@ -84,8 +95,7 @@ func TestJSONSchemaSuite(t *testing.T) {
 						t.Skipf("%s not supported yet", testName)
 						return
 					}
-					data, err := fs.ReadFile(suite, path.Join(p, setName))
-					require.NoError(t, err)
+					data := mustFile(t, suite, path.Join(draftPath, setName))
 
 					var tests []Test
 					require.NoError(t, json.Unmarshal(data, &tests))
@@ -104,7 +114,7 @@ var (
 	benchData []byte
 )
 
-func BenchmarkSchema_Validate(b *testing.B) {
+func BenchmarkValidate(b *testing.B) {
 	sch, err := Parse(benchSchema)
 	if err != nil {
 		b.Fatal(err)

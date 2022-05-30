@@ -30,6 +30,10 @@ func (p *parser) Parse(schema RawSchema) (*Schema, error) {
 }
 
 func (p *parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) {
+	return p.parse1(schema, ctx, func(s *Schema) {})
+}
+
+func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) (_ *Schema, err error) {
 	if ref := schema.Ref; ref != "" {
 		s, err := p.resolve(ref, ctx)
 		if err != nil {
@@ -71,6 +75,7 @@ func (p *parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) 
 		maxLength:            parseMinMax(schema.MaxLength),
 		pattern:              nil,
 	}
+	save(s)
 
 	for _, field := range schema.Required {
 		// See https://datatracker.ietf.org/doc/html/draft-fge-json-schema-validation-00#section-5.4.3.
@@ -205,6 +210,9 @@ func (p *parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, erro
 type resolveCtx map[string]struct{}
 
 func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
+	if len(ref) == 0 || ref[0] != '#' {
+		return nil, errors.New("invalid or unsupported ref")
+	}
 	if s, ok := p.refcache[ref]; ok {
 		return s, nil
 	}
@@ -224,5 +232,7 @@ func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
 		return nil, errors.Wrap(err, "find schema")
 	}
 
-	return p.parse(raw, ctx)
+	return p.parse1(raw, ctx, func(s *Schema) {
+		p.refcache[ref] = s
+	})
 }
