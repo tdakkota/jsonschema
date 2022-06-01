@@ -402,14 +402,18 @@ func (s *Schema) validateObject(d *jx.Decoder) error {
 			required[k] = struct{}{}
 		}
 	}
+	patternOrAdditional := s.additionalProperties.Set ||
+		len(s.patternProperties) > 0
 	for iter.Next() {
 		k := iter.Key()
 		delete(required, string(k))
 
-		if prop, ok := s.properties[string(k)]; ok ||
-			s.additionalProperties.Set ||
-			len(s.patternProperties) > 0 {
+		if prop, ok := s.properties[string(k)]; ok || patternOrAdditional {
 			if err := func() error {
+				if !patternOrAdditional {
+					return prop.validate(d)
+				}
+
 				item, err := d.Raw()
 				if err != nil {
 					return errors.Wrap(err, "parse JSON")
