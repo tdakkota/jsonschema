@@ -64,10 +64,24 @@ func (t typeSet) has(typ typeSet) bool {
 	return t == 0 || t&typ != 0
 }
 
-type additionalProperties struct {
+type (
+	additional struct {
+		Set    bool
+		Bool   bool
+		Schema *Schema
+	}
+	additionalProperties = additional
+	additionalItems      = additional
+)
+
+func (a additional) isSchema() bool {
+	return a.Set && a.Schema != nil
+}
+
+type items struct {
 	Set    bool
-	Bool   bool
-	Schema *Schema
+	Object *Schema
+	Array  []*Schema
 }
 
 // Schema is a parsed schema structure.
@@ -91,12 +105,11 @@ type Schema struct {
 	additionalProperties additionalProperties
 
 	// Array validators.
-	minItems    minMax
-	maxItems    minMax
-	uniqueItems bool
-	// TODO: array items
-	items       *Schema
-	prefixItems []*Schema
+	minItems        minMax
+	maxItems        minMax
+	uniqueItems     bool
+	items           items
+	additionalItems additionalItems
 
 	// Number validators.
 	// TODO: try to store small numbers as int64

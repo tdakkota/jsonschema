@@ -64,8 +64,8 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		minItems:             parseMinMax(schema.MinItems),
 		maxItems:             parseMinMax(schema.MaxItems),
 		uniqueItems:          schema.UniqueItems,
-		items:                nil,
-		prefixItems:          nil,
+		items:                items{},
+		additionalItems:      additionalItems{},
 		minimum:              nil,
 		exclusiveMinimum:     schema.ExclusiveMinimum,
 		maximum:              nil,
@@ -116,6 +116,18 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		}
 	}
 
+	if it := schema.Items; it != nil {
+		s.items.Set = true
+		if it.Array {
+			s.items.Array, err = p.parseMany(it.Schemas, ctx)
+		} else {
+			s.items.Object, err = p.parse(it.Schema, ctx)
+		}
+		if err != nil {
+			return nil, errors.Wrap(err, "items")
+		}
+	}
+
 	if ap := schema.AdditionalProperties; ap != nil {
 		s.additionalProperties.Set = true
 		if val := ap.Bool; val != nil {
@@ -124,6 +136,18 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 			s.additionalProperties.Schema, err = p.parse(ap.Schema, ctx)
 			if err != nil {
 				return nil, errors.Wrap(err, "additionalProperties")
+			}
+		}
+	}
+
+	if ai := schema.AdditionalItems; ai != nil {
+		s.additionalItems.Set = true
+		if val := ai.Bool; val != nil {
+			s.additionalItems.Bool = *val
+		} else {
+			s.additionalItems.Schema, err = p.parse(ai.Schema, ctx)
+			if err != nil {
+				return nil, errors.Wrap(err, "additionalItems")
 			}
 		}
 	}
@@ -144,7 +168,6 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		{"allOf", &s.allOf, schema.AllOf},
 		{"anyOf", &s.anyOf, schema.AnyOf},
 		{"oneOf", &s.oneOf, schema.OneOf},
-		{"prefixItems", &s.prefixItems, schema.PrefixItems},
 	} {
 		*many.to, err = p.parseMany(many.schemas, ctx)
 		if err != nil {
@@ -152,20 +175,10 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		}
 	}
 
-	for _, single := range []struct {
-		name   string
-		to     **Schema
-		schema *RawSchema
-	}{
-		{"not", &s.not, schema.Not},
-		{"items", &s.items, schema.Items},
-	} {
-		if single.schema == nil {
-			continue
-		}
-		*single.to, err = p.parse(*single.schema, ctx)
+	if sch := schema.Not; sch != nil {
+		s.not, err = p.parse(*sch, ctx)
 		if err != nil {
-			return nil, errors.Wrap(err, single.name)
+			return nil, errors.Wrap(err, "not")
 		}
 	}
 

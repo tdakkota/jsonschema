@@ -259,6 +259,33 @@ func (s *Schema) validateBool(d *jx.Decoder) error {
 	return s.skipType(d, booleanType)
 }
 
+func (s *Schema) elemValidator(idx int) (*Schema, error) {
+	// 5.3.1.2.  Conditions for successful validation
+	//
+	// If "items" is not present, or its value is an object, validation
+	// of the instance always succeeds, regardless of the value of
+	// "additionalItems";
+	if obj := s.items.Object; !s.items.Set || obj != nil {
+		return obj, nil
+	}
+
+	if arr := s.items.Array; idx < len(arr) {
+		return arr[idx], nil
+	}
+
+	ai := s.additionalItems
+	if !ai.Set {
+		return nil, nil
+	}
+	if ai.isSchema() {
+		return ai.Schema, nil
+	}
+	if ai.Bool {
+		return nil, nil
+	}
+	return nil, errors.New("schema does not allow additionalItems")
+}
+
 func (s *Schema) validateArray(d *jx.Decoder) error {
 	if err := s.checkType(arrayType); err != nil {
 		return err
@@ -267,8 +294,8 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 	if !(s.minItems.IsSet() ||
 		s.maxItems.IsSet() ||
 		s.uniqueItems ||
-		s.items != nil ||
-		len(s.prefixItems) > 0) {
+		s.items.Set ||
+		s.additionalItems.Set) {
 		return d.Skip()
 	}
 
@@ -281,11 +308,10 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 		items []jx.Raw
 	)
 	for iter.Next() {
-		sch := s.items
-		if i < len(s.prefixItems) {
-			sch = s.prefixItems[i]
+		sch, err := s.elemValidator(i)
+		if err != nil {
+			return err
 		}
-
 		if sch != nil || s.uniqueItems {
 			if err := func() error {
 				switch {

@@ -100,11 +100,11 @@ type RawSchema struct {
 	PatternProperties    RawPatternProperties  `json:"patternProperties,omitempty"`
 	AdditionalProperties *AdditionalProperties `json:"additionalProperties,omitempty"`
 
-	MinItems    *uint64     `json:"minItems,omitempty"`
-	MaxItems    *uint64     `json:"maxItems,omitempty"`
-	UniqueItems bool        `json:"uniqueItems,omitempty"`
-	Items       *RawSchema  `json:"items,omitempty"`
-	PrefixItems []RawSchema `json:"prefixItems,omitempty"`
+	MinItems        *uint64          `json:"minItems,omitempty"`
+	MaxItems        *uint64          `json:"maxItems,omitempty"`
+	UniqueItems     bool             `json:"uniqueItems,omitempty"`
+	Items           *Items           `json:"items,omitempty"`
+	AdditionalItems *AdditionalItems `json:"additionalItems,omitempty"`
 
 	Minimum          Num  `json:"minimum,omitempty"`
 	ExclusiveMinimum bool `json:"exclusiveMinimum,omitempty"`
@@ -164,47 +164,40 @@ func (p *RawProperties) UnmarshalJSON(data []byte) error {
 	})
 }
 
-// AdditionalProperties is JSON Schema additionalProperties validator description.
-type AdditionalProperties struct {
-	Bool   *bool
-	Schema RawSchema
+// Items is JSON Schema items validator description.
+type Items struct {
+	Array   bool // If set, "items" defined as array.
+	Schema  RawSchema
+	Schemas []RawSchema
 }
 
 // MarshalJSON implements json.Marshaler.
-func (p AdditionalProperties) MarshalJSON() ([]byte, error) {
-	if p.Bool != nil {
-		return json.Marshal(p.Bool)
+func (p Items) MarshalJSON() ([]byte, error) {
+	if p.Array {
+		return json.Marshal(p.Schemas)
 	}
 	return json.Marshal(p.Schema)
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
-func (p *AdditionalProperties) UnmarshalJSON(data []byte) error {
+func (p *Items) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	switch tt := d.Next(); tt {
+	case jx.Array:
+		p.Array = true
+		return json.Unmarshal(data, &p.Schemas)
 	case jx.Object:
-	case jx.Bool:
-		val, err := d.Bool()
-		if err != nil {
-			return err
-		}
-		p.Bool = &val
-		return nil
+		return json.Unmarshal(data, &p.Schema)
 	default:
 		return errors.Errorf("unexpected type %s", tt.String())
 	}
-
-	s := RawSchema{}
-	b, err := d.Raw()
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	p.Schema = s
-	return nil
 }
+
+// AdditionalItems is JSON Schema additionalItems validator description.
+type AdditionalItems = rawAdditional
+
+// AdditionalProperties is JSON Schema additionalProperties validator description.
+type AdditionalProperties = rawAdditional
 
 // RawPatternProperty is item of RawPatternProperties.
 type RawPatternProperty struct {
@@ -253,8 +246,43 @@ func (r *RawPatternProperties) UnmarshalJSON(data []byte) error {
 	})
 }
 
-// Discriminator is JSON Schema discriminator description.
-type Discriminator struct {
-	PropertyName string            `json:"propertyName"`
-	Mapping      map[string]string `json:"mapping,omitempty"`
+type rawAdditional struct {
+	Bool   *bool
+	Schema RawSchema
+}
+
+// MarshalJSON implements json.Marshaler.
+func (p rawAdditional) MarshalJSON() ([]byte, error) {
+	if p.Bool != nil {
+		return json.Marshal(p.Bool)
+	}
+	return json.Marshal(p.Schema)
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (p *rawAdditional) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	switch tt := d.Next(); tt {
+	case jx.Object:
+	case jx.Bool:
+		val, err := d.Bool()
+		if err != nil {
+			return err
+		}
+		p.Bool = &val
+		return nil
+	default:
+		return errors.Errorf("unexpected type %s", tt.String())
+	}
+
+	s := RawSchema{}
+	b, err := d.Raw()
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	p.Schema = s
+	return nil
 }
