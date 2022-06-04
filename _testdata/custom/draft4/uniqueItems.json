@@ -1,0 +1,13 @@
+[
+  {
+    "description": "uniqueItems validation",
+    "schema": {"uniqueItems": true},
+    "tests": [
+      {
+        "description": "objects are unique if have different length",
+        "data": [{"a": 1, "b": 1, "c": 1}, {"b": 2, "a": 1}],
+        "valid": true
+      }
+    ]
+  }
+]
