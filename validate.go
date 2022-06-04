@@ -384,33 +384,77 @@ func (s *Schema) validateObject(d *jx.Decoder) error {
 		len(s.required) > 0 ||
 		len(s.properties) > 0 ||
 		len(s.patternProperties) > 0 ||
-		s.additionalProperties.Set) {
+		s.additionalProperties.Set ||
+		len(s.dependentSchemas) > 0 ||
+		len(s.dependentRequired) > 0) {
 		return d.Skip()
 	}
 
-	iter, err := d.ObjIter()
-	if err != nil {
-		return errors.Wrap(err, "parse JSON")
+	type dependentSchema struct {
+		name   string
+		schema *Schema
 	}
 	var (
 		i        = 0
 		required map[string]struct{}
+		// Stack-allocated slice.
+		dependent = make([]dependentSchema, 0, 8)
 	)
+
 	if len(s.required) > 0 {
 		required = make(map[string]struct{}, len(s.required))
 		for k := range s.required {
 			required[k] = struct{}{}
 		}
 	}
-	patternOrAdditional := s.additionalProperties.Set ||
+	if len(s.dependentRequired) > 0 || len(s.dependentSchemas) > 0 {
+		if len(s.dependentRequired) > 0 && required == nil {
+			required = map[string]struct{}{}
+		}
+
+		if err := d.Capture(func(d *jx.Decoder) error {
+			return d.ObjBytes(func(d *jx.Decoder, key []byte) error {
+				if r, ok := s.dependentRequired[string(key)]; ok {
+					for _, value := range r {
+						required[value] = struct{}{}
+					}
+				}
+				if s, ok := s.dependentSchemas[string(key)]; ok {
+					dependent = append(dependent, dependentSchema{
+						name:   string(key),
+						schema: s,
+					})
+				}
+				return d.Skip()
+			})
+		}); err != nil {
+			return errors.Wrap(err, "collect dependent")
+		}
+	}
+	if len(dependent) > 0 {
+		for _, ds := range dependent {
+			if err := d.Capture(func(d *jx.Decoder) error {
+				return ds.schema.validate(d)
+			}); err != nil {
+				return errors.Wrapf(err, "dependent %q", ds.name)
+			}
+		}
+	}
+
+	multiPass := s.additionalProperties.Set ||
 		len(s.patternProperties) > 0
+
+	iter, err := d.ObjIter()
+	if err != nil {
+		return errors.Wrap(err, "parse JSON")
+	}
 	for iter.Next() {
 		k := iter.Key()
 		delete(required, string(k))
 
-		if prop, ok := s.properties[string(k)]; ok || patternOrAdditional {
+		if prop, ok := s.properties[string(k)]; ok || multiPass {
 			if err := func() error {
-				if !patternOrAdditional {
+				if !multiPass {
 					return prop.validate(d)
 				}
 

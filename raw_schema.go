@@ -99,6 +99,7 @@ type RawSchema struct {
 	Properties           RawProperties         `json:"properties,omitempty"`
 	PatternProperties    RawPatternProperties  `json:"patternProperties,omitempty"`
 	AdditionalProperties *AdditionalProperties `json:"additionalProperties,omitempty"`
+	Dependencies         Dependencies          `json:"dependencies,omitempty"`
 
 	MinItems        *uint64          `json:"minItems,omitempty"`
 	MaxItems        *uint64          `json:"maxItems,omitempty"`
@@ -243,6 +244,81 @@ func (r *RawPatternProperties) UnmarshalJSON(data []byte) error {
 			Schema:  s,
 		})
 		return nil
+	})
+}
+
+// Dependencies is unparsed JSON Schema dependencies validator description.
+type Dependencies struct {
+	Required map[string][]string
+	Schemas  map[string]RawSchema
+}
+
+// MarshalJSON implements json.Marshaler.
+func (r Dependencies) MarshalJSON() ([]byte, error) {
+	e := jx.GetWriter()
+	e.ObjStart()
+	for key, values := range r.Required {
+		e.FieldStart(key)
+		e.ArrStart()
+		for _, value := range values {
+			e.Str(value)
+		}
+		e.ArrEnd()
+	}
+	for key, value := range r.Schemas {
+		e.FieldStart(key)
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		e.Raw(raw)
+	}
+	e.ObjEnd()
+	return e.Buf, nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (r *Dependencies) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return d.ObjBytes(func(d *jx.Decoder, key []byte) error {
+		switch tt := d.Next(); tt {
+		case jx.Array:
+			var values []string
+			if err := d.Arr(func(d *jx.Decoder) error {
+				val, err := d.Str()
+				if err != nil {
+					return err
+				}
+				values = append(values, val)
+				return nil
+			}); err != nil {
+				return err
+			}
+
+			if r.Required == nil {
+				r.Required = map[string][]string{}
+			}
+			r.Required[string(key)] = values
+			return nil
+		case jx.Object:
+			raw, err := d.Raw()
+			if err != nil {
+				return err
+			}
+
+			var schema RawSchema
+			if err := json.Unmarshal(raw, &schema); err != nil {
+				return err
+			}
+
+			if r.Schemas == nil {
+				r.Schemas = map[string]RawSchema{}
+			}
+			r.Schemas[string(key)] = schema
+			return nil
+		default:
+			return errors.Errorf("unexpected type %q", tt)
+		}
 	})
 }
 

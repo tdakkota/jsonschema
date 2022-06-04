@@ -103,6 +103,8 @@ type Schema struct {
 	properties           map[string]*Schema
 	patternProperties    []patternProperty
 	additionalProperties additionalProperties
+	dependentRequired    map[string][]string
+	dependentSchemas     map[string]*Schema
 
 	// Array validators.
 	minItems        minMax

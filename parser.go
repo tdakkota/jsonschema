@@ -140,6 +140,20 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		}
 	}
 
+	{
+		dep := schema.Dependencies
+		if len(dep.Schemas) > 0 {
+			s.dependentSchemas = make(map[string]*Schema, len(dep.Schemas))
+			for field, schema := range dep.Schemas {
+				s.dependentSchemas[field], err = p.parse(schema, ctx)
+				if err != nil {
+					return nil, errors.Wrapf(err, "dependent schema %q", field)
+				}
+			}
+		}
+		s.dependentRequired = dep.Required
+	}
+
 	if ai := schema.AdditionalItems; ai != nil {
 		s.additionalItems.Set = true
 		if val := ai.Bool; val != nil {
