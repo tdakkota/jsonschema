@@ -110,3 +110,85 @@ func runSuite(t *testing.T, suite embed.FS, suiteRoot string) {
 		})
 	}
 }
+
+func TestParse(t *testing.T) {
+	const veryBad = `{
+  "allOf": [
+    {
+      "patternProperties": {
+        "foo$": {
+          "dependencies": {
+            "foo": {
+              "additionalProperties": {
+                "additionalItems": {
+                  "properties": {
+                    "foo": {
+                      "items": {
+                        "required": [
+                          "foo",
+                          "foo"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}`
+
+	tests := []struct {
+		data    string
+		want    *Schema
+		wantErr bool
+	}{
+		// Invalid JSON handling.
+		{"", nil, true},
+		{"{", nil, true},
+		{"[]", nil, true},
+		// Invalid structure handling.
+		{`{"type":{}}`, nil, true},
+		{`{"id":{}}`, nil, true},
+		{`{"items":10}`, nil, true},
+		{`{"minimum":"10"}`, nil, true},
+		{`{"minimum":true}`, nil, true},
+		{`{"properties":["foobar"]}`, nil, true},
+		{`{"additionalProperties":{"type":1}}`, nil, true},
+		{`{"additionalProperties":[]}`, nil, true},
+		{`{"patternProperties":{"foo":[]}}`, nil, true},
+		{`{"dependencies":{"foo":1}}`, nil, true},
+		{`{"dependencies":{"foo":[1]}}`, nil, true},
+		{`{"dependencies":{"foo":{"type":1}}}`, nil, true},
+		// Invalid "type".
+		{`{"type":["foobar"]}`, nil, true},
+		// Invalid "id".
+		{`{"dependencies":{"id":":"}}`, nil, true},
+		{`{"definitions":{"foo":{"id":":"}}}`, nil, true},
+		{`{"items":[{"id":":"}]}`, nil, true},
+		{`{"items":{"id":":"}}`, nil, true},
+		// Invalid "ref".
+		{`{"$ref":":"}`, nil, true},
+		// Invalid "required".
+		{veryBad, nil, true},
+		// Bad regex.
+		{`{"pattern":"\\"}`, nil, true},
+		{`{"patternProperties":{"\\":{}}}`, nil, true},
+	}
+	for i, tt := range tests {
+		tt := tt
+		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+			a := require.New(t)
+			got, err := Parse([]byte(tt.data))
+			if tt.wantErr {
+				a.Error(err)
+				return
+			}
+			a.NoError(err)
+			a.Equal(tt.want, got)
+		})
+	}
+}
