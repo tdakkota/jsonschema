@@ -80,6 +80,11 @@ func (s *Schema) validateEnum(data []byte) error {
 	if len(s.enum) == 0 {
 		return nil
 	}
+
+	if _, ok := s.enumMap[string(data)]; ok {
+		// Fast path.
+		return nil
+	}
 	for _, variant := range s.enum {
 		ok, err := jsonequal.Equal(variant, data)
 		if err != nil {

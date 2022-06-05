@@ -55,6 +55,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		types:                typeSet(0).set(schema.Type),
 		format:               schema.Format,
 		enum:                 schema.Enum,
+		enumMap:              make(map[string]struct{}, len(schema.Enum)),
 		allOf:                nil,
 		anyOf:                nil,
 		oneOf:                nil,
@@ -65,6 +66,8 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		properties:           map[string]*Schema{},
 		patternProperties:    nil,
 		additionalProperties: additionalProperties{},
+		dependentRequired:    nil,
+		dependentSchemas:     nil,
 		minItems:             parseMinMax(schema.MinItems),
 		maxItems:             parseMinMax(schema.MaxItems),
 		uniqueItems:          schema.UniqueItems,
@@ -80,6 +83,10 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		pattern:              nil,
 	}
 	save(s)
+
+	for _, value := range schema.Enum {
+		s.enumMap[string(value)] = struct{}{}
+	}
 
 	for _, field := range schema.Required {
 		// See https://datatracker.ietf.org/doc/html/draft-fge-json-schema-validation-00#section-5.4.3.

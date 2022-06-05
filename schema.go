@@ -88,7 +88,9 @@ type items struct {
 type Schema struct {
 	types  typeSet
 	format string
-	enum   []json.RawMessage
+
+	enum    []json.RawMessage
+	enumMap map[string]struct{}
 
 	// Schema composition.
 	allOf []*Schema
