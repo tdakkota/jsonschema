@@ -13,19 +13,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testingT interface {
+	require.TestingT
+	Skip(...interface{})
+}
+
 var (
 	//go:embed _draft/draft4.json
 	draft4Raw []byte
 	draft4    = errors.Must(Parse(draft4Raw))
 )
 
-func mustDir(t require.TestingT, fsys embed.FS, p string) []fs.DirEntry {
+func mustDir(t testingT, fsys embed.FS, p string) []fs.DirEntry {
 	entries, err := fsys.ReadDir(p)
 	require.NoError(t, err)
 	return entries
 }
 
-func mustFile(t require.TestingT, fsys embed.FS, p string) []byte {
+func mustFile(t testingT, fsys embed.FS, p string) []byte {
 	entries, err := fsys.ReadFile(p)
 	require.NoError(t, err)
 	return entries

@@ -1,0 +1,164 @@
+{
+  "linters-settings": {
+    "gocyclo": {
+      "min-complexity": 15
+    },
+    "maligned": {
+      "suggest-new": true
+    },
+    "dupl": {
+      "threshold": 120
+    },
+    "goconst": {
+      "min-len": 2,
+      "min-occurrences": 3
+    },
+    "misspell": {
+      "locale": "US"
+    },
+    "lll": {
+      "line-length": 140
+    },
+    "gocritic": {
+      "enabled-tags": [
+        "diagnostic",
+        "experimental",
+        "opinionated",
+        "performance",
+        "style"
+      ],
+      "disabled-checks": [
+        "hugeParam",
+        "rangeValCopy",
+        "exitAfterDefer",
+        "whyNoLint",
+        "appendAssign",
+        "octalLiteral",
+        "httpNoBody",
+        "unnecessaryBlock"
+      ]
+    }
+  },
+  "linters": {
+    "enable": [
+      "deadcode",
+      "depguard",
+      "dogsled",
+      "errcheck",
+      "goconst",
+      "gocritic",
+      "revive",
+      "gosec",
+      "govet",
+      "ineffassign",
+      "lll",
+      "misspell",
+      "nakedret",
+      "structcheck",
+      "typecheck",
+      "unconvert",
+      "unparam",
+      "varcheck",
+      "whitespace"
+    ],
+    "disable": [
+      "staticcheck",
+      "gosimple",
+      "unused",
+      "stylecheck"
+    ]
+  },
+  "issues": {
+    "exclude-use-default": false,
+    "exclude-rules": [
+      {
+        "source": "//go:generate",
+        "linters": [
+          "lll"
+        ]
+      },
+      {
+        "source": "// See https://",
+        "linters": [
+          "lll"
+        ]
+      },
+      {
+        "path": "_test\\.go",
+        "linters": [
+          "gocyclo",
+          "errcheck",
+          "dupl",
+          "gosec",
+          "funlen",
+          "goconst",
+          "gocognit",
+          "scopelint",
+          "lll"
+        ]
+      },
+      {
+        "linters": [
+          "govet"
+        ],
+        "text": "declaration of \"(err|ctx|log)\""
+      },
+      {
+        "path": "cmd\\/.+\\/main\\.go",
+        "linters": [
+          "goconst",
+          "funlen",
+          "gocognit",
+          "gocyclo"
+        ]
+      },
+      {
+        "path": "(conv|uri|gen)",
+        "linters": [
+          "revive",
+          "golint"
+        ],
+        "text": "should have comment.+or be unexported"
+      },
+      {
+        "path": "(cmd|tools)(\\/|\\\\).+(\\/|\\\\).+\\.go",
+        "linters": [
+          "revive",
+          "golint"
+        ],
+        "text": "should have comment.+or be unexported"
+      },
+      {
+        "path": "(cmd|tools)(\\/|\\\\).+(\\/|\\\\).+\\.go",
+        "text": "G(304|306|307)"
+      },
+      {
+        "path": "http",
+        "linters": [
+          "gosec"
+        ],
+        "text": "G103"
+      },
+      {
+        "path": "http",
+        "source": "Set",
+        "linters": [
+          "revive"
+        ],
+        "text": "context-as-argument"
+      },
+      {
+        "linters": [
+          "goconst"
+        ],
+        "text": "string `(string|number|int32|int64)`"
+      },
+      {
+        "linters": [
+          "revive"
+        ],
+        "text": "if-return: redundant if ...; err != nil check, just return error instead."
+      }
+    ]
+  }
+}
