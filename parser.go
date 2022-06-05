@@ -1,4 +1,3 @@
-// Package parser contains JSON Schema parsing utilities.
 package jsonschema
 
 import (
