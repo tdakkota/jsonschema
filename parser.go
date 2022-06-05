@@ -1,23 +1,27 @@
-// Package parser contains JSON Schema parsing utilities.
 package jsonschema
 
 import (
+	"encoding/json"
 	"math/big"
+	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/go-faster/errors"
+
+	"github.com/tdakkota/jsonschema/internal/jsonpointer"
 )
 
 // parser parses JSON schemas.
 type parser struct {
-	resolver rootResolver
+	doc      *document
 	refcache map[string]*Schema
 }
 
 // newParser creates new parser.
-func newParser(root []byte) *parser {
+func newParser(root *document) *parser {
 	return &parser{
-		resolver: rootResolver(root),
+		doc:      root,
 		refcache: map[string]*Schema{},
 	}
 }
@@ -237,9 +241,6 @@ func (p *parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, erro
 type resolveCtx map[string]struct{}
 
 func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
-	if len(ref) == 0 || ref[0] != '#' {
-		return nil, errors.New("invalid or unsupported ref")
-	}
 	if s, ok := p.refcache[ref]; ok {
 		return s, nil
 	}
@@ -254,12 +255,46 @@ func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
 		delete(ctx, ref)
 	}()
 
-	raw, err := p.resolver.ResolveReference(ref)
+	root, err := p.resolveURL(ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "find schema")
+		return nil, errors.Wrap(err, "resolve URL")
+	}
+
+	var raw RawSchema
+	if err := json.Unmarshal(root, &raw); err != nil {
+		return nil, errors.Wrap(err, "unmarshal")
 	}
 
 	return p.parse1(raw, ctx, func(s *Schema) {
 		p.refcache[ref] = s
 	})
+}
+
+func (p *parser) resolveURL(ref string) ([]byte, error) {
+	if ref == "" {
+		return nil, errors.New("empty ref")
+	}
+
+	u, err := url.Parse(ref)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedRef := ref
+	if id := p.doc.id; id != nil {
+		parsedRef = id.ResolveReference(u).String()
+	}
+	if root, ok := p.doc.ids[parsedRef]; ok {
+		return root, nil
+	}
+
+	frag := ref
+	if !strings.HasPrefix(ref, "#/") {
+		frag = u.Fragment
+		if u.Scheme != "" || u.Host != "" || u.Path != "" {
+			return nil, errors.New("invalid or unsupported ref")
+		}
+	}
+
+	return jsonpointer.Resolve(frag, p.doc.data)
 }

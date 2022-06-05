@@ -8,5 +8,9 @@ func Parse(data []byte) (*Schema, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	return newParser(data).Parse(raw)
+	doc, err := collectIDs(nil, data)
+	if err != nil {
+		return nil, err
+	}
+	return newParser(doc).Parse(raw)
 }
