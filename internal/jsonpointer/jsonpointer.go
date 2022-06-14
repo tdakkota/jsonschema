@@ -25,13 +25,9 @@ func Resolve(ptr string, buf []byte) ([]byte, error) {
 		}
 		// Fast-path to not parse URL.
 		return find(unescaped, buf)
+	default:
+		return nil, errors.New("invalid pointer")
 	}
-
-	u, err := url.Parse(ptr)
-	if err != nil {
-		return nil, err
-	}
-	return find(u.Fragment, buf)
 }
 
 func validate(buf []byte) ([]byte, error) {

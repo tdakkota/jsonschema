@@ -55,9 +55,6 @@ func TestSpecification(t *testing.T) {
 		{"#/%20", "7", false},
 		{"#/m~0n", "8", false},
 
-		// Test URL pointer.
-		{"https://example.com#/m~0n", "8", false},
-
 		// Invalid URL.
 		{"\x00", "", true},
 
