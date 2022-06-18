@@ -13,26 +13,29 @@ type document struct {
 	ids  map[string][]byte
 }
 
-func (doc *document) findID(base *url.URL, d *jx.Decoder, key []byte) error {
-	if string(key) != "id" {
-		return d.Skip()
-	}
+func (doc *document) findID(d *jx.Decoder, base *url.URL) error {
+	return d.ObjBytes(func(d *jx.Decoder, key []byte) error {
+		if string(key) != "id" {
+			return d.Skip()
+		}
 
-	val, err := d.Str()
-	if err != nil {
-		return err
-	}
+		val, err := d.Str()
+		if err != nil {
+			return err
+		}
 
-	id, err := url.Parse(val)
-	if err != nil {
-		return err
-	}
+		id, err := url.Parse(val)
+		if err != nil {
+			return err
+		}
 
-	doc.id = id
-	if base != nil {
-		doc.id = base.ResolveReference(id)
-	}
-	return nil
+		doc.id = id
+		if base != nil {
+			doc.id = base.ResolveReference(id)
+		}
+
+		return nil
+	})
 }
 
 func collectIDs(base *url.URL, data []byte) (*document, error) {
@@ -42,10 +45,8 @@ func collectIDs(base *url.URL, data []byte) (*document, error) {
 		ids:  map[string][]byte{},
 	}
 
-	d := jx.DecodeBytes(data)
-	if err := d.ObjBytes(func(d *jx.Decoder, key []byte) error {
-		return root.findID(base, d, key)
-	}); err != nil {
+	rootd := jx.DecodeBytes(data)
+	if err := root.findID(rootd, base); err != nil {
 		return nil, errors.Wrap(err, "find ID")
 	}
 	if root.id != nil {
@@ -91,21 +92,21 @@ func collectIDs(base *url.URL, data []byte) (*document, error) {
 		})
 	}
 
-	d.ResetBytes(data)
-	if err := d.ObjBytes(func(r *jx.Decoder, key []byte) error {
+	rootd.ResetBytes(data)
+	if err := rootd.ObjBytes(func(d *jx.Decoder, key []byte) error {
 		switch string(key) {
 		case "definitions", "properties", "patternProperties", "dependencies":
-			return doObj(r)
+			return doObj(d)
 		case "additionalItems", "additionalProperties", "not":
-			return do(r)
+			return do(d)
 		case "allOf", "anyOf", "oneOf":
-			return doArr(r)
+			return doArr(d)
 		case "items":
 			switch d.Next() {
 			case jx.Array:
-				return doArr(r)
+				return doArr(d)
 			case jx.Object:
-				return do(r)
+				return do(d)
 			}
 		}
 		return d.Skip()
