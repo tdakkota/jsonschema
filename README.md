@@ -1,7 +1,7 @@
 # jsonschema
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/tdakkota/jsonschema.svg)](https://pkg.go.dev/github.com/tdakkota/jsonschema)
-[![codecov](https://codecov.io/gh/tdakkota/jsonschema/branch/master/graph/badge.svg?token=DVH08RoQyx)](https://codecov.io/gh/tdakkota/jsonschema)
+[![codecov](https://codecov.io/gh/tdakkota/jsonschema/branch/master/graph/badge.svg)](https://codecov.io/gh/tdakkota/jsonschema)
 
 jsonschema is a [JSON Schema Draft 4](https://datatracker.ietf.org/doc/html/draft-fge-json-schema-validation-00)
 validator implementation
