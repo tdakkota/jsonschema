@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/go-faster/errors v0.6.1
-	github.com/go-faster/jx v0.36.0
-	github.com/stretchr/testify v1.7.2
+	github.com/go-faster/jx v0.37.0
+	github.com/stretchr/testify v1.7.4
 )
 
 require (
