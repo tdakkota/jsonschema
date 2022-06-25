@@ -57,10 +57,7 @@ func (p *compiler) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Sche
 		if err != nil {
 			return nil, errors.Wrap(err, "parse $id")
 		}
-		ctx = &resolveCtx{
-			parent: idURL,
-			refs:   ctx.refs,
-		}
+		ctx = ctx.child(idURL)
 	}
 
 	if f := schema.Format; f != "" {

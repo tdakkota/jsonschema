@@ -26,28 +26,25 @@ func (r *refKey) fromURL(u *url.URL) (loc url.URL) {
 
 type resolveCtx struct {
 	parent *url.URL
-	// Store references to detect infinite recursive references.
-	refs map[refKey]struct{}
 }
 
 func newResolveCtx(parent *url.URL) *resolveCtx {
 	return &resolveCtx{
 		parent: parent,
-		refs:   map[refKey]struct{}{},
 	}
 }
 
-func (r *resolveCtx) add(key refKey) error {
-	if _, ok := r.refs[key]; ok {
-		// TODO: better error?
-		return errors.New("infinite recursion")
+func (r *resolveCtx) child(newParent *url.URL) *resolveCtx {
+	return &resolveCtx{
+		parent: newParent,
 	}
-	r.refs[key] = struct{}{}
+}
+
+func (r *resolveCtx) add(refKey) error {
 	return nil
 }
 
-func (r *resolveCtx) delete(key refKey) {
-	delete(r.refs, key)
+func (r *resolveCtx) delete(refKey) {
 }
 
 func (r *resolveCtx) parseURL(ref string) (*url.URL, error) {
@@ -92,10 +89,7 @@ func (p *compiler) resolve(ref string, ctx *resolveCtx) (*Schema, error) {
 		return nil, errors.Wrap(err, "unmarshal")
 	}
 
-	return p.compile1(raw, &resolveCtx{
-		parent: &locURL,
-		refs:   ctx.refs,
-	}, func(s *Schema) {
+	return p.compile1(raw, ctx.child(&locURL), func(s *Schema) {
 		p.refcache[ref] = s
 	})
 }
