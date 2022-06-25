@@ -91,9 +91,7 @@ func runSuite(t *testing.T, suite embed.FS, suiteRoot string) {
 			sets := mustDir(t, suite, draftPath)
 
 			skipSet := map[string]struct{}{
-				"definitions": {},
-				"format":      {},
-				"refRemote":   {},
+				"format": {},
 			}
 
 			for _, set := range sets {
