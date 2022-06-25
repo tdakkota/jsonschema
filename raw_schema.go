@@ -83,6 +83,7 @@ func (r *SchemaType) UnmarshalJSON(data []byte) error {
 
 // RawSchema is unparsed JSON Schema.
 type RawSchema struct {
+	ID     string            `json:"id,omitempty"` // TODO(tdakkota): get id field name from draft struct
 	Ref    string            `json:"$ref,omitempty"`
 	Type   SchemaType        `json:"type,omitempty"`
 	Format string            `json:"format,omitempty"`

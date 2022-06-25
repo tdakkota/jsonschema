@@ -1,5 +1,4 @@
-// Package jsonpointer contains RFC 6901 JSON Pointer implementation.
-package jsonpointer
+package jsonschema
 
 import (
 	"net/url"
@@ -10,43 +9,31 @@ import (
 	"github.com/go-faster/jx"
 )
 
-// Resolve takes given pointer and returns byte slice of requested value if any.
-// If value not found, returns NotFoundError.
-func Resolve(ptr string, buf []byte) ([]byte, error) {
-	switch {
-	case ptr == "" || ptr == "#":
-		return validate(buf)
-	case ptr[0] == '/':
-		return find(ptr, buf)
-	case ptr[0] == '#': // Note that length is bigger than 1.
-		unescaped, err := url.PathUnescape(ptr[1:])
-		if err != nil {
-			return nil, errors.Wrap(err, "unescape")
+func splitFunc(s string, sep byte, cb func(s string) error) error {
+	for {
+		idx := strings.IndexByte(s, sep)
+		if idx < 0 {
+			break
 		}
-		// Fast-path to not parse URL.
-		return find(unescaped, buf)
-	default:
-		return nil, errors.New("invalid pointer")
+		if err := cb(s[:idx]); err != nil {
+			return err
+		}
+		s = s[idx+1:]
 	}
+	return cb(s)
 }
 
-func validate(buf []byte) ([]byte, error) {
-	if err := jx.DecodeBytes(buf).Validate(); err != nil {
-		return nil, errors.Wrap(err, "validate")
-	}
-	return buf, nil
-}
-
-func find(ptr string, buf []byte) ([]byte, error) {
+func find(u *url.URL, buf []byte) (*url.URL, []byte, error) {
 	d := jx.GetDecoder()
 	defer jx.PutDecoder(d)
 
+	ptr := u.Fragment
 	if ptr == "" {
-		return validate(buf)
+		return u, buf, nil
 	}
 
 	if ptr[0] != '/' {
-		return nil, errors.Errorf("invalid pointer %q: pointer must start with '/'", ptr)
+		return nil, nil, errors.Errorf("invalid pointer %q: pointer must start with '/'", ptr)
 	}
 	// Cut first /.
 	ptr = ptr[1:]
@@ -60,10 +47,11 @@ func find(ptr string, buf []byte) ([]byte, error) {
 		d.ResetBytes(buf)
 		switch tt := d.Next(); tt {
 		case jx.Object:
-			result, ok, err = findKey(d, part)
+			r, err := findKey(u, d, part)
 			if err != nil {
 				return errors.Wrapf(err, "find key %q", part)
 			}
+			u, result, ok = r.u, r.result, r.ok
 		case jx.Array:
 			result, ok, err = findIdx(d, part)
 			if err != nil {
@@ -73,13 +61,13 @@ func find(ptr string, buf []byte) ([]byte, error) {
 			return errors.Errorf("unexpected type %q", tt)
 		}
 		if !ok {
-			return &NotFoundError{Pointer: ptr}
+			return errors.Errorf("pointer %q not found", ptr)
 		}
 
 		buf = result
 		return err
 	})
-	return buf, err
+	return u, buf, err
 }
 
 func findIdx(d *jx.Decoder, part string) (result []byte, ok bool, _ error) {
@@ -112,27 +100,58 @@ func findIdx(d *jx.Decoder, part string) (result []byte, ok bool, _ error) {
 	return result, ok, iter.Err()
 }
 
-func findKey(d *jx.Decoder, part string) (result []byte, ok bool, _ error) {
+type findKeyResult struct {
+	u      *url.URL
+	result []byte
+	ok     bool
+}
+
+func findKey(base *url.URL, d *jx.Decoder, part string) (r findKeyResult, _ error) {
 	iter, err := d.ObjIter()
 	if err != nil {
-		return nil, false, err
+		return r, err
 	}
 
 	for iter.Next() {
-		if key := iter.Key(); string(key) == part {
-			raw, err := d.Raw()
-			if err != nil {
-				return nil, false, errors.Wrapf(err, "parse %q", key)
-			}
-			result = raw
-			ok = true
+		if r.ok && r.u != nil {
+			// We found "id" and needed key, return.
 			break
 		}
-		if err := d.Skip(); err != nil {
-			return nil, false, err
+		switch key := iter.Key(); string(key) {
+		case part:
+			raw, err := d.Raw()
+			if err != nil {
+				return r, errors.Wrapf(err, "parse %q", key)
+			}
+			r.result = raw
+			r.ok = true
+		case "id":
+			// TODO(tdakkota): get id field name from draft struct
+			id, err := d.Str()
+			if err != nil {
+				return r, errors.Wrapf(err, "parse %q", key)
+			}
+
+			parser := url.Parse
+			if base != nil {
+				parser = base.Parse
+			}
+
+			u, err := parser(id)
+			if err != nil {
+				return r, errors.Wrapf(err, "parse id")
+			}
+			r.u = u
+		default:
+			if err := d.Skip(); err != nil {
+				return r, err
+			}
 		}
 	}
-	return result, ok, iter.Err()
+	if r.u == nil {
+		r.u = base
+	}
+	return r, iter.Err()
 }
 
 var (

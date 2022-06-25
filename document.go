@@ -13,9 +13,27 @@ type document struct {
 	ids  map[string][]byte
 }
 
+func (doc *document) resolveID(u *url.URL) ([]byte, bool) {
+	parsedRef := u
+	if doc.id != nil {
+		parsedRef = doc.id.ResolveReference(u)
+	}
+	v, ok := doc.ids[parsedRef.String()]
+	return v, ok
+}
+
+func (doc *document) resolve(u *url.URL) (*url.URL, []byte, error) {
+	v, ok := doc.resolveID(u)
+	if ok {
+		return u, v, nil
+	}
+	return find(u, doc.data)
+}
+
 func (doc *document) findID(d *jx.Decoder, base *url.URL) error {
 	return d.ObjBytes(func(d *jx.Decoder, key []byte) error {
 		if string(key) != "id" {
+			// TODO(tdakkota): get id field name from draft struct
 			return d.Skip()
 		}
 

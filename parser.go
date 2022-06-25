@@ -1,49 +1,66 @@
 package jsonschema
 
 import (
-	"encoding/json"
 	"math/big"
-	"net/url"
 	"regexp"
-	"strings"
 
 	"github.com/go-faster/errors"
-
-	"github.com/tdakkota/jsonschema/internal/jsonpointer"
 )
 
-// parser parses JSON schemas.
-type parser struct {
-	doc      *document
+// compiler parses JSON schemas.
+type compiler struct {
+	doc    *document
+	remote RemoteResolver
+
+	remotes  map[string]*document
 	refcache map[string]*Schema
 }
 
-// newParser creates new parser.
-func newParser(root *document) *parser {
-	return &parser{
-		doc:      root,
+// newCompiler creates new compiler.
+func newCompiler(root *document) *compiler {
+	var key refKey
+	if root.id != nil {
+		key.fromURL(root.id)
+	}
+	return &compiler{
+		doc:    root,
+		remote: Remote{},
+		remotes: map[string]*document{
+			"":      root,
+			key.loc: root,
+		},
 		refcache: map[string]*Schema{},
 	}
 }
 
-// Parse parses given RawSchema and returns parsed Schema.
+// Compile compiles given RawSchema and returns compiled Schema.
 //
 // Do not modify RawSchema fields, Schema will reference them.
-func (p *parser) Parse(schema RawSchema) (*Schema, error) {
-	return p.parse(schema, resolveCtx{})
+func (p *compiler) Compile(schema RawSchema) (*Schema, error) {
+	return p.compile(schema, newResolveCtx(p.doc.id))
 }
 
-func (p *parser) parse(schema RawSchema, ctx resolveCtx) (_ *Schema, err error) {
-	return p.parse1(schema, ctx, func(s *Schema) {})
+func (p *compiler) compile(schema RawSchema, ctx *resolveCtx) (_ *Schema, err error) {
+	return p.compile1(schema, ctx, func(s *Schema) {})
 }
 
-func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) (_ *Schema, err error) {
+func (p *compiler) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Schema)) (_ *Schema, err error) {
 	if ref := schema.Ref; ref != "" {
 		s, err := p.resolve(ref, ctx)
 		if err != nil {
 			return nil, errors.Wrapf(err, "resolve %q", ref)
 		}
 		return s, nil
+	}
+	if id := schema.ID; id != "" {
+		idURL, err := ctx.parseURL(id)
+		if err != nil {
+			return nil, errors.Wrap(err, "parse $id")
+		}
+		ctx = &resolveCtx{
+			parent: idURL,
+			refs:   ctx.refs,
+		}
 	}
 
 	if f := schema.Format; f != "" {
@@ -99,7 +116,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 	}
 
 	for _, field := range schema.Properties {
-		s.properties[field.Name], err = p.parse(field.Schema, ctx)
+		s.properties[field.Name], err = p.compile(field.Schema, ctx)
 		if err != nil {
 			return nil, errors.Wrapf(err, "property %q", field.Name)
 		}
@@ -112,7 +129,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 				return err
 			}
 
-			item, err := p.parse(field.Schema, ctx)
+			item, err := p.compile(field.Schema, ctx)
 			if err != nil {
 				return err
 			}
@@ -130,9 +147,9 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 	if it := schema.Items; it != nil {
 		s.items.Set = true
 		if it.Array {
-			s.items.Array, err = p.parseMany(it.Schemas, ctx)
+			s.items.Array, err = p.compileMany(it.Schemas, ctx)
 		} else {
-			s.items.Object, err = p.parse(it.Schema, ctx)
+			s.items.Object, err = p.compile(it.Schema, ctx)
 		}
 		if err != nil {
 			return nil, errors.Wrap(err, "items")
@@ -144,7 +161,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		if val := ap.Bool; val != nil {
 			s.additionalProperties.Bool = *val
 		} else {
-			s.additionalProperties.Schema, err = p.parse(ap.Schema, ctx)
+			s.additionalProperties.Schema, err = p.compile(ap.Schema, ctx)
 			if err != nil {
 				return nil, errors.Wrap(err, "additionalProperties")
 			}
@@ -156,7 +173,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		if len(dep.Schemas) > 0 {
 			s.dependentSchemas = make(map[string]*Schema, len(dep.Schemas))
 			for field, schema := range dep.Schemas {
-				s.dependentSchemas[field], err = p.parse(schema, ctx)
+				s.dependentSchemas[field], err = p.compile(schema, ctx)
 				if err != nil {
 					return nil, errors.Wrapf(err, "dependent schema %q", field)
 				}
@@ -170,7 +187,7 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		if val := ai.Bool; val != nil {
 			s.additionalItems.Bool = *val
 		} else {
-			s.additionalItems.Schema, err = p.parse(ai.Schema, ctx)
+			s.additionalItems.Schema, err = p.compile(ai.Schema, ctx)
 			if err != nil {
 				return nil, errors.Wrap(err, "additionalItems")
 			}
@@ -194,14 +211,14 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 		{"anyOf", &s.anyOf, schema.AnyOf},
 		{"oneOf", &s.oneOf, schema.OneOf},
 	} {
-		*many.to, err = p.parseMany(many.schemas, ctx)
+		*many.to, err = p.compileMany(many.schemas, ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, many.name)
 		}
 	}
 
 	if sch := schema.Not; sch != nil {
-		s.not, err = p.parse(*sch, ctx)
+		s.not, err = p.compile(*sch, ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, "not")
 		}
@@ -231,10 +248,10 @@ func (p *parser) parse1(schema RawSchema, ctx resolveCtx, save func(s *Schema)) 
 	return s, nil
 }
 
-func (p *parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, error) {
+func (p *compiler) compileMany(schemas []RawSchema, ctx *resolveCtx) ([]*Schema, error) {
 	result := make([]*Schema, 0, len(schemas))
 	for i, schema := range schemas {
-		s, err := p.parse(schema, ctx)
+		s, err := p.compile(schema, ctx)
 		if err != nil {
 			return nil, errors.Wrapf(err, "[%d]", i)
 		}
@@ -243,65 +260,4 @@ func (p *parser) parseMany(schemas []RawSchema, ctx resolveCtx) ([]*Schema, erro
 	}
 
 	return result, nil
-}
-
-type resolveCtx map[string]struct{}
-
-func (p *parser) resolve(ref string, ctx resolveCtx) (*Schema, error) {
-	if s, ok := p.refcache[ref]; ok {
-		return s, nil
-	}
-
-	if _, ok := ctx[ref]; ok {
-		// TODO: better error?
-		return nil, errors.New("infinite recursion")
-	}
-	ctx[ref] = struct{}{}
-	defer func() {
-		// Drop the resolved ref to prevent false-positive infinite recursion detection.
-		delete(ctx, ref)
-	}()
-
-	root, err := p.resolveURL(ref)
-	if err != nil {
-		return nil, errors.Wrap(err, "resolve URL")
-	}
-
-	var raw RawSchema
-	if err := json.Unmarshal(root, &raw); err != nil {
-		return nil, errors.Wrap(err, "unmarshal")
-	}
-
-	return p.parse1(raw, ctx, func(s *Schema) {
-		p.refcache[ref] = s
-	})
-}
-
-func (p *parser) resolveURL(ref string) ([]byte, error) {
-	if ref == "" {
-		return nil, errors.New("empty ref")
-	}
-
-	u, err := url.Parse(ref)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedRef := ref
-	if id := p.doc.id; id != nil {
-		parsedRef = id.ResolveReference(u).String()
-	}
-	if root, ok := p.doc.ids[parsedRef]; ok {
-		return root, nil
-	}
-
-	frag := ref
-	if !strings.HasPrefix(ref, "#/") {
-		frag = u.Fragment
-		if u.Scheme != "" || u.Host != "" || u.Path != "" {
-			return nil, errors.New("invalid or unsupported ref")
-		}
-	}
-
-	return jsonpointer.Resolve(frag, p.doc.data)
 }
