@@ -55,10 +55,7 @@ func runTests(t *testing.T, tests []Test) {
 			require.NoError(t, draft4.Validate(test.Schema))
 
 			sch, err := Parse(test.Schema)
-			if err != nil {
-				t.Skipf("Schema: %s,\nError: %s", test.Schema, err)
-				return
-			}
+			require.NoError(t, err)
 			for i, cse := range test.Tests {
 				cse := cse
 				t.Run(fmt.Sprintf("Case%d", i+1), func(t *testing.T) {
