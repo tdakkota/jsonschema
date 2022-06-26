@@ -3,6 +3,7 @@ package jsonschema
 import (
 	"testing"
 
+	"github.com/go-faster/jx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,4 +21,13 @@ func Test_collectIDs(t *testing.T) {
 	a.NoError(err)
 	a.NotEmpty(d.ids)
 	a.NotEmpty(d.ids["http://localhost:1234/baseUriChange/"])
+
+	d, err = collectIDs(nil, []byte(`{"definitions": null}`))
+	a.NoError(err)
+	a.Empty(d.ids)
+}
+
+func Test_document_findID(t *testing.T) {
+	doc := &document{}
+	require.Error(t, doc.findID(jx.DecodeStr(`{"id": null}`), nil))
 }
