@@ -45,7 +45,7 @@ func Example() {
 ## Install
 
 ```
-go install -v github.com/tdakkota/jsonschema@latest
+go get -d github.com/tdakkota/jsonschema
 ```
 
 ## Roadmap
