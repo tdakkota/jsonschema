@@ -8,23 +8,17 @@ import (
 	"github.com/go-faster/errors"
 )
 
-type refKey struct {
-	loc string
-	ref string
-}
+const maxResolveDepth = 1000
 
-func (r *refKey) fromURL(u *url.URL) (loc url.URL) {
-	{
-		// Make copy.
-		loc = *u
-		loc.Fragment = ""
-		r.loc = loc.String()
-	}
-	r.ref = "#" + u.Fragment
+func stripFragment(u *url.URL) (loc url.URL) {
+	// Make copy.
+	loc = *u
+	loc.Fragment = ""
 	return loc
 }
 
 type resolveCtx struct {
+	depth  int
 	parent *url.URL
 }
 
@@ -40,11 +34,16 @@ func (r *resolveCtx) child(newParent *url.URL) *resolveCtx {
 	}
 }
 
-func (r *resolveCtx) add(refKey) error {
+func (r *resolveCtx) add() error {
+	if r.depth+1 >= maxResolveDepth {
+		return errors.New("resolve depth exceeded")
+	}
+	r.depth++
 	return nil
 }
 
-func (r *resolveCtx) delete(refKey) {
+func (r *resolveCtx) delete() {
+	r.depth--
 }
 
 func (r *resolveCtx) parseURL(ref string) (*url.URL, error) {
@@ -63,25 +62,22 @@ func (p *compiler) resolve(ref string, ctx *resolveCtx) (*Schema, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "parse ref")
 	}
-	var key refKey
-	locURL := key.fromURL(u)
+	locURL := stripFragment(u)
 
-	if err := ctx.add(key); err != nil {
+	if err := ctx.add(); err != nil {
 		return nil, err
 	}
 	defer func() {
 		// Drop the resolved ref to prevent false-positive infinite recursion detection.
-		ctx.delete(key)
+		ctx.delete()
 	}()
 
-	newURL, root, err := p.resolveURL(u, key)
+	newURL, root, err := p.resolveURL(u, locURL.String())
 	if err != nil {
 		return nil, errors.Wrap(err, "resolve URL")
 	}
 	if newURL != nil {
-		cpy := *newURL
-		locURL = cpy
-		locURL.Fragment = ""
+		locURL = stripFragment(newURL)
 	}
 
 	var raw RawSchema
@@ -94,11 +90,10 @@ func (p *compiler) resolve(ref string, ctx *resolveCtx) (*Schema, error) {
 	})
 }
 
-func (p *compiler) resolveURL(u *url.URL, key refKey) (*url.URL, []byte, error) {
+func (p *compiler) resolveURL(u *url.URL, loc string) (*url.URL, []byte, error) {
 	if val, ok := p.doc.resolveID(u); ok {
 		return u, val, nil
 	}
-	loc := key.loc
 	doc, ok := p.remotes[loc]
 	if !ok {
 		var err error

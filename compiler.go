@@ -18,16 +18,17 @@ type compiler struct {
 
 // newCompiler creates new compiler.
 func newCompiler(root *document) *compiler {
-	var key refKey
+	var loc string
 	if root.id != nil {
-		key.fromURL(root.id)
+		r := stripFragment(root.id)
+		loc = r.String()
 	}
 	return &compiler{
 		doc:    root,
 		remote: Remote{},
 		remotes: map[string]*document{
-			"":      root,
-			key.loc: root,
+			"":  root,
+			loc: root,
 		},
 		refcache: map[string]*Schema{},
 	}
