@@ -23,12 +23,16 @@ func splitFunc(s string, sep byte, cb func(s string) error) error {
 	return cb(s)
 }
 
-func find(u *url.URL, buf []byte) (*url.URL, []byte, error) {
+func find(u *url.URL, buf []byte, validate bool) (*url.URL, []byte, error) {
 	d := jx.GetDecoder()
 	defer jx.PutDecoder(d)
 
 	ptr := u.Fragment
 	if ptr == "" {
+		if validate {
+			d.ResetBytes(buf)
+			return u, buf, d.Validate()
+		}
 		return u, buf, nil
 	}
 

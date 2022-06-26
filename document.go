@@ -27,7 +27,7 @@ func (doc *document) resolve(u *url.URL) (*url.URL, []byte, error) {
 	if ok {
 		return u, v, nil
 	}
-	return find(u, doc.data)
+	return find(u, doc.data, false)
 }
 
 func (doc *document) findID(d *jx.Decoder, base *url.URL) error {
