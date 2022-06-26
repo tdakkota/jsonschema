@@ -1,9 +1,12 @@
-package jsonpointer
+package jsonschema
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
 	"github.com/stretchr/testify/require"
 )
@@ -60,7 +63,6 @@ func TestSpecification(t *testing.T) {
 
 		// Invalid path.
 		{"#foo/unknown", "", true},
-		{"#%2", "", true},
 
 		// Path does not exist.
 		{"/foo/unknown", "", true},
@@ -73,7 +75,14 @@ func TestSpecification(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
 			a := require.New(t)
-			got, err := Resolve(tt.ptr, specExample)
+			base := &url.URL{
+				Fragment: tt.ptr,
+			}
+			if strings.HasPrefix(tt.ptr, "#") {
+				base.Fragment, _ = url.PathUnescape(strings.TrimPrefix(tt.ptr, "#"))
+			}
+
+			_, got, err := find(base, specExample, true)
 			if tt.wantErr {
 				a.Error(err)
 				return
@@ -112,13 +121,14 @@ func BenchmarkResolve(b *testing.B) {
 	var (
 		buf []byte
 		err error
+		ref = errors.Must(url.Parse("#/components/schemas/Error/properties/code/type"))
 	)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		buf, err = Resolve("#/components/schemas/Error/properties/code/type", specExample)
+		_, buf, err = find(ref, specExample, true)
 	}
 
 	if err != nil {
@@ -149,7 +159,11 @@ func TestResolve(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
 			a := require.New(t)
-			got, err := Resolve(tt.ptr, []byte(tt.input))
+			base := &url.URL{
+				Fragment: strings.TrimPrefix(tt.ptr, "#"),
+			}
+
+			_, got, err := find(base, []byte(tt.input), true)
 			if tt.wantErr {
 				a.Error(err)
 				return
@@ -203,15 +217,15 @@ func Test_findKey(t *testing.T) {
 		tt := tt
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
 			a := require.New(t)
-			gotResult, gotOk, err := findKey(jx.DecodeStr(tt.input), tt.part)
+			r, err := findKey(nil, jx.DecodeStr(tt.input), tt.part)
 			if tt.wantErr {
 				a.Error(err)
-				a.False(gotOk)
+				a.False(r.ok)
 				return
 			}
 			a.NoError(err)
-			a.True(gotOk)
-			a.Equal(tt.wantResult, gotResult)
+			a.True(r.ok)
+			a.Equal(tt.wantResult, r.result)
 		})
 	}
 }

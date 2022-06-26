@@ -12,5 +12,5 @@ func Parse(data []byte) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newParser(doc).Parse(raw)
+	return newCompiler(doc).Compile(raw)
 }
