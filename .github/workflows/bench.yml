@@ -1,0 +1,10 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    uses: tdakkota/workflows/.github/workflows/bench.yml@master
+    with:
+      write-summary: true
