@@ -34,10 +34,7 @@ func collectBench(b testingT) (r []benchSchema) {
 		schema := mustFile(b, bench, path.Join(schemaDirPath, "schema.json"))
 		sch, err := Parse(schema)
 		if err != nil {
-			r = append(r, benchSchema{
-				Name: e.Name(),
-				Skip: true,
-			})
+			b.Errorf("Cannot generate %s: %s", schemaDirPath, err)
 			continue
 		}
 
