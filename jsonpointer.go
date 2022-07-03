@@ -130,6 +130,12 @@ func findKey(base *url.URL, d *jx.Decoder, part string) (r findKeyResult, _ erro
 			r.result = raw
 			r.ok = true
 		case "id":
+			if d.Next() != jx.String {
+				if err := d.Skip(); err != nil {
+					return r, err
+				}
+				continue
+			}
 			// TODO(tdakkota): get id field name from draft struct
 			id, err := d.Str()
 			if err != nil {
