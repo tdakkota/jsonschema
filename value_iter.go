@@ -9,11 +9,12 @@ import (
 	"github.com/tdakkota/jsonschema/internal/jsonequal"
 )
 
+// Number is parsed JSON number.
 type Number struct {
 	*big.Rat
 }
 
-// Value represents JSON value.
+// Value represents JSON Schema value to validate against.
 type Value[V any] interface {
 	// Type returns JSON type.
 	Type() jx.Type
@@ -48,16 +49,20 @@ func (j jsonValue) Type() jx.Type {
 	return j.raw.Type()
 }
 
-func (j jsonValue) dec() *jx.Decoder {
-	return jx.DecodeBytes(j.raw)
-}
-
 func (j jsonValue) Bool() bool {
-	return errors.Must(j.dec().Bool())
+	dec := jx.GetDecoder()
+	dec.ResetBytes(j.raw)
+	defer jx.PutDecoder(dec)
+
+	return errors.Must(dec.Bool())
 }
 
 func (j jsonValue) Number() Number {
-	n := errors.Must(j.dec().Num())
+	dec := jx.GetDecoder()
+	dec.ResetBytes(j.raw)
+	defer jx.PutDecoder(dec)
+
+	n := errors.Must(dec.Num())
 	var rat big.Rat
 	if err := rat.UnmarshalText(n); err != nil {
 		panic(err)
@@ -73,7 +78,10 @@ func (j jsonValue) Str() []byte {
 }
 
 func (j jsonValue) Array(cb func(jsonValue) error) error {
-	dec := j.dec()
+	dec := jx.GetDecoder()
+	dec.ResetBytes(j.raw)
+	defer jx.PutDecoder(dec)
+
 	iter := errors.Must(dec.ArrIter())
 	for iter.Next() {
 		raw := errors.Must(dec.Raw())
@@ -85,7 +93,10 @@ func (j jsonValue) Array(cb func(jsonValue) error) error {
 }
 
 func (j jsonValue) Object(cb func(key []byte, value jsonValue) error) error {
-	dec := j.dec()
+	dec := jx.GetDecoder()
+	dec.ResetBytes(j.raw)
+	defer jx.PutDecoder(dec)
+
 	iter := errors.Must(dec.ObjIter())
 	for iter.Next() {
 		key := iter.Key()
