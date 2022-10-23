@@ -6,10 +6,12 @@ import (
 	"regexp"
 
 	"github.com/go-faster/errors"
+
+	"github.com/tdakkota/jsonschema/valueiter"
 )
 
 // compiler parses JSON schemas.
-type compiler[V Value[V]] struct {
+type compiler[V valueiter.Value[V]] struct {
 	doc         *document
 	remote      RemoteResolver
 	valueMapper func(json.RawMessage) (V, error)
@@ -19,7 +21,7 @@ type compiler[V Value[V]] struct {
 }
 
 // newCompiler creates new compiler.
-func newCompiler[V Value[V]](root *document, mapper func(json.RawMessage) (V, error)) *compiler[V] {
+func newCompiler[V valueiter.Value[V]](root *document, mapper func(json.RawMessage) (V, error)) *compiler[V] {
 	var loc string
 	if root.id != nil {
 		r := stripFragment(root.id)
