@@ -343,7 +343,13 @@ func validateObject[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 		}
 	}
 
-	if err := val.Object(func(k []byte, val V) error {
+	if err := val.Object(func(k []byte, val V) (rerr error) {
+		defer func() {
+			i++
+			if rerr != nil {
+				rerr = errors.Wrapf(rerr, "%q", k)
+			}
+		}()
 		delete(required, string(k))
 
 		prop, ok := s.properties[string(k)]
@@ -375,7 +381,6 @@ func validateObject[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 			return validate(s, val, cmp)
 		}
 
-		i++
 		return nil
 	}); err != nil {
 		return err
