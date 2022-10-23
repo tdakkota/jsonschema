@@ -15,11 +15,21 @@ type Number struct {
 
 // Value represents JSON value.
 type Value[V any] interface {
+	// Type returns JSON type.
 	Type() jx.Type
+	// Bool parses value as bool.
 	Bool() bool
+	// Number parses value as number.
 	Number() Number
-	Str() string
+	// Str parses value as string.
+	//
+	// Returned value may reference the buffer, do not modify or retain it.
+	Str() []byte
+	// Array parses value as array and calls cb for each element.
 	Array(cb func(value V) error) error
+	// Object parses value as object and calls cb for each key-value pair.
+	//
+	// Key may reference the buffer, do not modify or retain it.
 	Object(cb func(key []byte, value V) error) error
 }
 
@@ -57,8 +67,9 @@ func (j jsonValue) Number() Number {
 	}
 }
 
-func (j jsonValue) Str() string {
-	return errors.Must(j.dec().Str())
+func (j jsonValue) Str() []byte {
+	// Do not use pool here, because StrBytes() may return a slice that references the buffer.
+	return errors.Must(jx.DecodeBytes(j.raw).StrBytes())
 }
 
 func (j jsonValue) Array(cb func(jsonValue) error) error {

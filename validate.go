@@ -142,7 +142,7 @@ func validateString[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 		panic("unreachable")
 	}
 	if s.minLength.IsSet() || s.maxLength.IsSet() {
-		count := utf8.RuneCountInString(str)
+		count := utf8.RuneCount(str)
 		if s.minLength.IsSet() && count < int(s.minLength) {
 			return errors.Errorf("length is smaller than %d", s.minLength)
 		}
@@ -150,7 +150,7 @@ func validateString[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 			return errors.Errorf("length is bigger than %d", s.maxLength)
 		}
 	}
-	if s.pattern != nil && !s.pattern.MatchString(str) {
+	if s.pattern != nil && !s.pattern.Match(str) {
 		return errors.Errorf("does not match pattern %s", s.pattern)
 	}
 	return nil
