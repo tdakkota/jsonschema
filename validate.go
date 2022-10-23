@@ -2,71 +2,48 @@ package jsonschema
 
 import (
 	"fmt"
-	"math/big"
 	"unicode/utf8"
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
-
-	"github.com/tdakkota/jsonschema/internal/jsonequal"
 )
 
-// Validate validates given data.
-func (s *Schema) Validate(data []byte) error {
-	d := jx.GetDecoder()
-	defer jx.PutDecoder(d)
-	// TODO: do not stop early, collect errors instead.
-	d.ResetBytes(data)
-	return s.validate(d)
-}
-
-func (s *Schema) validate(d *jx.Decoder) error {
-	tt := d.Next()
-	if tt == jx.Invalid {
-		return errors.Wrap(d.Validate(), "invalid json")
-	}
-
+func validate[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.enum) > 0 || len(s.allOf) > 0 || len(s.oneOf) > 0 || len(s.anyOf) > 0 || s.not != nil {
-		data, err := d.Raw()
-		if err != nil {
-			return errors.Wrap(err, "invalid json")
-		}
-
-		d = jx.GetDecoder()
-		defer jx.PutDecoder(d)
-		d.ResetBytes(data)
-
-		if err := s.validateEnum(data); err != nil {
+		if err := validateEnum(s, val, cmp); err != nil {
 			return errors.Wrap(err, "enum")
 		}
-		if err := s.validateAllOf(data); err != nil {
+		if err := validateAllOf(s, val, cmp); err != nil {
 			return errors.Wrap(err, "allOf")
 		}
-		if err := s.validateOneOf(data); err != nil {
+		if err := validateOneOf(s, val, cmp); err != nil {
 			return errors.Wrap(err, "oneOf")
 		}
-		if err := s.validateAnyOf(data); err != nil {
+		if err := validateAnyOf(s, val, cmp); err != nil {
 			return errors.Wrap(err, "anyOf")
 		}
-		if err := s.validateNot(data); err != nil {
+		if err := validateNot(s, val, cmp); err != nil {
 			return errors.Wrap(err, "not")
 		}
 	}
 
-	var err error
+	var (
+		tt  = val.Type()
+		err error
+	)
 	switch tt {
 	case jx.String:
-		err = s.validateString(d)
+		err = validateString(s, val, cmp)
 	case jx.Number:
-		err = s.validateNumber(d)
+		err = validateNumber(s, val, cmp)
 	case jx.Null:
-		err = s.validateNull(d)
+		err = validateNull(s, val, cmp)
 	case jx.Bool:
-		err = s.validateBool(d)
+		err = validateBool(s, val, cmp)
 	case jx.Array:
-		err = s.validateArray(d)
+		err = validateArray(s, val, cmp)
 	case jx.Object:
-		err = s.validateObject(d)
+		err = validateObject(s, val, cmp)
 	default:
 		panic(fmt.Sprintf("unreachable: %q", tt))
 	}
@@ -76,17 +53,13 @@ func (s *Schema) validate(d *jx.Decoder) error {
 	return nil
 }
 
-func (s *Schema) validateEnum(data []byte) error {
+func validateEnum[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.enum) == 0 {
 		return nil
 	}
 
-	if _, ok := s.enumMap[string(data)]; ok {
-		// Fast path.
-		return nil
-	}
 	for _, variant := range s.enum {
-		ok, err := jsonequal.Equal(variant, data)
+		ok, err := cmp.Equal(variant, val)
 		if err != nil {
 			return errors.Wrap(err, "compare")
 		}
@@ -94,34 +67,26 @@ func (s *Schema) validateEnum(data []byte) error {
 			return nil
 		}
 	}
-	return errors.Errorf("%q is not present in enum", data)
+	return errors.Errorf("%v is not present in enum", val)
 }
 
-func (s *Schema) validateAllOf(data []byte) error {
-	d := jx.GetDecoder()
-	defer jx.PutDecoder(d)
-
+func validateAllOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	for i, schema := range s.allOf {
-		d.ResetBytes(data)
-		if err := schema.validate(d); err != nil {
+		if err := validate(schema, val, cmp); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
 		}
 	}
 	return nil
 }
 
-func (s *Schema) validateOneOf(data []byte) error {
+func validateOneOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.oneOf) == 0 {
 		return nil
 	}
 
-	d := jx.GetDecoder()
-	defer jx.PutDecoder(d)
-
 	counter := 0
 	for _, schema := range s.oneOf {
-		d.ResetBytes(data)
-		if err := schema.validate(d); err == nil {
+		if err := validate(schema, val, cmp); err == nil {
 			if counter != 0 {
 				return errors.New("must match exactly once")
 			}
@@ -134,64 +99,50 @@ func (s *Schema) validateOneOf(data []byte) error {
 	return errors.New("must match at least once")
 }
 
-func (s *Schema) validateAnyOf(data []byte) error {
+func validateAnyOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.anyOf) == 0 {
 		return nil
 	}
 
-	d := jx.GetDecoder()
-	defer jx.PutDecoder(d)
-
 	for _, schema := range s.anyOf {
-		d.ResetBytes(data)
-		if err := schema.validate(d); err == nil {
+		if err := validate(schema, val, cmp); err == nil {
 			return nil
 		}
 	}
 	return errors.New("must match at least once")
 }
 
-func (s *Schema) validateNot(data []byte) error {
-	if s.not != nil {
-		if err := s.not.Validate(data); err == nil {
+func validateNot[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	if s := s.not; s != nil {
+		if err := validate(s, val, cmp); err == nil {
 			return errors.New("must not match")
 		}
 	}
 	return nil
 }
 
-func (s *Schema) checkType(t typeSet) error {
+func checkType[V Value[V]](s *Schema[V], t typeSet) error {
 	if !s.types.has(t) {
 		return errors.New("type is not allowed")
 	}
 	return nil
 }
 
-func (s *Schema) skipType(d *jx.Decoder, t typeSet) error {
-	if err := s.checkType(t); err != nil {
-		return err
-	}
-	return d.Skip()
-}
-
-func (s *Schema) validateString(d *jx.Decoder) error {
-	if err := s.checkType(stringType); err != nil {
+func validateString[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	if err := checkType(s, stringType); err != nil {
 		return err
 	}
 
 	if !(s.format != "" || s.minLength.IsSet() || s.maxLength.IsSet() || s.pattern != nil) {
-		return d.Skip()
+		return nil
 	}
 
-	str, err := d.StrBytes()
-	if err != nil {
-		return errors.Wrap(err, "parse JSON")
-	}
+	str := val.Str()
 	if s.format != "" {
 		panic("unreachable")
 	}
 	if s.minLength.IsSet() || s.maxLength.IsSet() {
-		count := utf8.RuneCount(str)
+		count := utf8.RuneCountInString(str)
 		if s.minLength.IsSet() && count < int(s.minLength) {
 			return errors.Errorf("length is smaller than %d", s.minLength)
 		}
@@ -199,41 +150,33 @@ func (s *Schema) validateString(d *jx.Decoder) error {
 			return errors.Errorf("length is bigger than %d", s.maxLength)
 		}
 	}
-	if s.pattern != nil && !s.pattern.Match(str) {
+	if s.pattern != nil && !s.pattern.MatchString(str) {
 		return errors.Errorf("does not match pattern %s", s.pattern)
 	}
 	return nil
 }
 
-func (s *Schema) validateNumber(d *jx.Decoder) error {
+func validateNumber[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	hasNumber := s.types.has(numberType)
 
 	if hasNumber && !(s.minimum != nil || s.maximum != nil || s.multipleOf != nil) {
-		return d.Skip()
+		return nil
 	}
 
-	num, err := d.Num()
-	if err != nil {
-		return errors.Wrap(err, "parse JSON")
-	}
-
+	num := val.Number()
 	if !hasNumber {
 		isInt := num.IsInt()
 		if isInt {
-			if err := s.checkType(integerType); err != nil {
+			if err := checkType(s, integerType); err != nil {
 				return err
 			}
 		} else {
-			return s.checkType(numberType)
+			return checkType(s, numberType)
 		}
 	}
 
 	if s.minimum != nil || s.maximum != nil || s.multipleOf != nil {
-		val := new(big.Rat)
-		// TODO: more efficient way?
-		if err := val.UnmarshalText(num); err != nil {
-			return errors.Wrap(err, "parse")
-		}
+		val := num.Rat
 		if s.minimum != nil {
 			cmp := val.Cmp(s.minimum)
 			if (s.exclusiveMinimum && cmp <= 0) || cmp < 0 {
@@ -256,15 +199,15 @@ func (s *Schema) validateNumber(d *jx.Decoder) error {
 	return nil
 }
 
-func (s *Schema) validateNull(d *jx.Decoder) error {
-	return s.skipType(d, nullType)
+func validateNull[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	return checkType(s, nullType)
 }
 
-func (s *Schema) validateBool(d *jx.Decoder) error {
-	return s.skipType(d, booleanType)
+func validateBool[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	return checkType(s, booleanType)
 }
 
-func (s *Schema) elemValidator(idx int) (*Schema, error) {
+func elemValidator[V Value[V]](s *Schema[V], idx int) (*Schema[V], error) {
 	// 5.3.1.2.  Conditions for successful validation
 	//
 	// If "items" is not present, or its value is an object, validation
@@ -291,8 +234,8 @@ func (s *Schema) elemValidator(idx int) (*Schema, error) {
 	return nil, errors.New("schema does not allow additionalItems")
 }
 
-func (s *Schema) validateArray(d *jx.Decoder) error {
-	if err := s.checkType(arrayType); err != nil {
+func validateArray[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	if err := checkType(s, arrayType); err != nil {
 		return err
 	}
 
@@ -301,59 +244,31 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 		s.uniqueItems ||
 		s.items.Set ||
 		s.additionalItems.Set) {
-		return d.Skip()
+		return nil
 	}
 
-	iter, err := d.ArrIter()
-	if err != nil {
-		return errors.Wrap(err, "parse JSON")
-	}
 	var (
+		items []V
 		i     = 0
-		items []jx.Raw
 	)
-	for iter.Next() {
-		sch, err := s.elemValidator(i)
+	if err := val.Array(func(val V) error {
+		sch, err := elemValidator(s, i)
 		if err != nil {
 			return err
 		}
-		if sch != nil || s.uniqueItems {
-			if err := func() error {
-				switch {
-				case sch != nil && s.uniqueItems:
-					raw, err := d.Raw()
-					if err != nil {
-						return errors.Wrap(err, "parse JSON")
-					}
-					items = append(items, raw)
-
-					if err := sch.Validate(raw); err != nil {
-						return err
-					}
-				case s.uniqueItems:
-					raw, err := d.Raw()
-					if err != nil {
-						return errors.Wrap(err, "parse JSON")
-					}
-					items = append(items, raw)
-				case sch != nil:
-					if err := sch.validate(d); err != nil {
-						return err
-					}
-				}
-				return nil
-			}(); err != nil {
-				return errors.Wrapf(err, "[%d]", i)
-			}
-		} else {
-			if err := d.Skip(); err != nil {
-				return errors.Wrap(err, "parse JSON")
+		if sch != nil {
+			if err := validate(sch, val, cmp); err != nil {
+				return err
 			}
 		}
+		if s.uniqueItems {
+			items = append(items, val)
+		}
+
 		i++
-	}
-	if err := iter.Err(); err != nil {
-		return errors.Wrap(err, "parse JSON")
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	if len(items) > 1 {
@@ -362,7 +277,7 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 				if xi == yi {
 					continue
 				}
-				if ok, _ := jsonequal.Equal(x, y); ok {
+				if ok, _ := cmp.Equal(x, y); ok {
 					return errors.Errorf("items %d and %d are equal", xi, yi)
 				}
 			}
@@ -379,8 +294,8 @@ func (s *Schema) validateArray(d *jx.Decoder) error {
 	return nil
 }
 
-func (s *Schema) validateObject(d *jx.Decoder) error {
-	if err := s.checkType(objectType); err != nil {
+func validateObject[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+	if err := checkType(s, objectType); err != nil {
 		return err
 	}
 
@@ -392,18 +307,12 @@ func (s *Schema) validateObject(d *jx.Decoder) error {
 		s.additionalProperties.Set ||
 		len(s.dependentSchemas) > 0 ||
 		len(s.dependentRequired) > 0) {
-		return d.Skip()
+		return nil
 	}
 
-	type dependentSchema struct {
-		name   string
-		schema *Schema
-	}
 	var (
 		i        = 0
 		required map[string]struct{}
-		// Stack-allocated slice.
-		dependent = make([]dependentSchema, 0, 8)
 	)
 
 	if len(s.required) > 0 {
@@ -416,98 +325,60 @@ func (s *Schema) validateObject(d *jx.Decoder) error {
 		if len(s.dependentRequired) > 0 && required == nil {
 			required = map[string]struct{}{}
 		}
-
-		if err := d.Capture(func(d *jx.Decoder) error {
-			return d.ObjBytes(func(d *jx.Decoder, key []byte) error {
-				if r, ok := s.dependentRequired[string(key)]; ok {
-					for _, value := range r {
-						required[value] = struct{}{}
-					}
+		rootval := val
+		if err := val.Object(func(k []byte, _ V) error {
+			if r, ok := s.dependentRequired[string(k)]; ok {
+				for _, value := range r {
+					required[value] = struct{}{}
 				}
-				if s, ok := s.dependentSchemas[string(key)]; ok {
-					dependent = append(dependent, dependentSchema{
-						name:   string(key),
-						schema: s,
-					})
-				}
-				return d.Skip()
-			})
-		}); err != nil {
-			return errors.Wrap(err, "collect dependent")
-		}
-	}
-	if len(dependent) > 0 {
-		for _, ds := range dependent {
-			if err := d.Capture(func(d *jx.Decoder) error {
-				return ds.schema.validate(d)
-			}); err != nil {
-				return errors.Wrapf(err, "dependent %q", ds.name)
 			}
+			if ds, ok := s.dependentSchemas[string(k)]; ok {
+				if err := validate(ds, rootval, cmp); err != nil {
+					return errors.Wrapf(err, "dependent %q", k)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 
-	multiPass := s.additionalProperties.Set ||
-		len(s.patternProperties) > 0
-
-	iter, err := d.ObjIter()
-	if err != nil {
-		return errors.Wrap(err, "parse JSON")
-	}
-	for iter.Next() {
-		k := iter.Key()
+	if err := val.Object(func(k []byte, val V) error {
 		delete(required, string(k))
 
-		if prop, ok := s.properties[string(k)]; ok || multiPass {
-			if err := func() error {
-				if !multiPass {
-					return prop.validate(d)
+		prop, ok := s.properties[string(k)]
+		var matched bool
+		for _, p := range s.patternProperties {
+			if p.Regexp.Match(k) {
+				matched = true
+				if err := validate(p.Schema, val, cmp); err != nil {
+					return errors.Wrapf(err, "pattern %q", p.Regexp)
 				}
-
-				item, err := d.Raw()
-				if err != nil {
-					return errors.Wrap(err, "parse JSON")
-				}
-
-				var matched bool
-				for _, p := range s.patternProperties {
-					if p.Regexp.Match(k) {
-						matched = true
-						if err := p.Schema.Validate(item); err != nil {
-							return errors.Wrapf(err, "pattern %q", p.Regexp)
-						}
-					}
-				}
-				if ok {
-					return prop.Validate(item)
-				}
-
-				if matched {
-					return nil
-				}
-
-				ap := s.additionalProperties
-				if ap.Set && ap.Schema == nil && !ap.Bool {
-					return errors.New("additional properties are not allowed")
-				}
-				if sch := ap.Schema; sch != nil {
-					if err := sch.Validate(item); err != nil {
-						return errors.Wrap(err, "additionalProperties")
-					}
-				}
-
-				return nil
-			}(); err != nil {
-				return errors.Wrapf(err, "%q", k)
-			}
-		} else {
-			if err := d.Skip(); err != nil {
-				return errors.Wrap(err, "parse JSON")
 			}
 		}
+		if ok {
+			return validate(prop, val, cmp)
+		}
+
+		if matched {
+			return nil
+		}
+
+		ap := s.additionalProperties
+		if ap.Set && ap.Schema == nil && !ap.Bool {
+			return errors.New("additional properties are not allowed")
+		}
+		if s := ap.Schema; s != nil {
+			if err := validate(s, val, cmp); err != nil {
+				return errors.Wrap(err, "additionalProperties")
+			}
+			return validate(s, val, cmp)
+		}
+
 		i++
-	}
-	if err := iter.Err(); err != nil {
-		return errors.Wrap(err, "parse JSON")
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	for k := range required {
