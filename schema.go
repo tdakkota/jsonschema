@@ -1,14 +1,13 @@
 package jsonschema
 
 import (
-	"encoding/json"
 	"math/big"
 	"regexp"
 )
 
-type patternProperty struct {
+type patternProperty[V Value[V]] struct {
 	Regexp *regexp.Regexp
-	Schema *Schema
+	Schema *Schema[V]
 }
 
 type minMax int
@@ -65,55 +64,52 @@ func (t typeSet) has(typ typeSet) bool {
 }
 
 type (
-	additional struct {
+	additional[V Value[V]] struct {
 		Set    bool
 		Bool   bool
-		Schema *Schema
+		Schema *Schema[V]
 	}
-	additionalProperties = additional
-	additionalItems      = additional
 )
 
-func (a additional) isSchema() bool {
+func (a additional[V]) isSchema() bool {
 	return a.Set && a.Schema != nil
 }
 
-type items struct {
+type schemaItems[V Value[V]] struct {
 	Set    bool
-	Object *Schema
-	Array  []*Schema
+	Object *Schema[V]
+	Array  []*Schema[V]
 }
 
 // Schema is a parsed schema structure.
-type Schema struct {
+type Schema[V Value[V]] struct {
 	types  typeSet
 	format string
 
-	enum    []json.RawMessage
-	enumMap map[string]struct{}
+	enum []V
 
 	// Schema composition.
-	allOf []*Schema
-	anyOf []*Schema
-	oneOf []*Schema
-	not   *Schema
+	allOf []*Schema[V]
+	anyOf []*Schema[V]
+	oneOf []*Schema[V]
+	not   *Schema[V]
 
 	// Object validators.
 	minProperties        minMax
 	maxProperties        minMax
 	required             map[string]struct{}
-	properties           map[string]*Schema
-	patternProperties    []patternProperty
-	additionalProperties additionalProperties
+	properties           map[string]*Schema[V]
+	patternProperties    []patternProperty[V]
+	additionalProperties additional[V]
 	dependentRequired    map[string][]string
-	dependentSchemas     map[string]*Schema
+	dependentSchemas     map[string]*Schema[V]
 
 	// Array validators.
 	minItems        minMax
 	maxItems        minMax
 	uniqueItems     bool
-	items           items
-	additionalItems additionalItems
+	items           schemaItems[V]
+	additionalItems additional[V]
 
 	// Number validators.
 	// TODO: try to store small numbers as int64

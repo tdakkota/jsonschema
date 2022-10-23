@@ -53,7 +53,7 @@ func (r *resolveCtx) parseURL(ref string) (*url.URL, error) {
 	return url.Parse(ref)
 }
 
-func (p *compiler) resolve(ref string, ctx *resolveCtx) (*Schema, error) {
+func (p *compiler[V]) resolve(ref string, ctx *resolveCtx) (*Schema[V], error) {
 	if s, ok := p.refcache[ref]; ok {
 		return s, nil
 	}
@@ -85,12 +85,12 @@ func (p *compiler) resolve(ref string, ctx *resolveCtx) (*Schema, error) {
 		return nil, errors.Wrap(err, "unmarshal")
 	}
 
-	return p.compile1(raw, ctx.child(&locURL), func(s *Schema) {
+	return p.compile1(raw, ctx.child(&locURL), func(s *Schema[V]) {
 		p.refcache[ref] = s
 	})
 }
 
-func (p *compiler) resolveURL(u *url.URL, loc string) (*url.URL, []byte, error) {
+func (p *compiler[V]) resolveURL(u *url.URL, loc string) (*url.URL, []byte, error) {
 	if val, ok := p.doc.resolveID(u); ok {
 		return u, val, nil
 	}

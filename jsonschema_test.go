@@ -52,7 +52,7 @@ func runTests(t *testing.T, tests []Test) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			require.NoError(t, draft4.Validate(test.Schema))
+			require.NoError(t, ValidateJSON(draft4, test.Schema))
 
 			sch, err := Parse(test.Schema)
 			require.NoError(t, err)
@@ -67,7 +67,7 @@ func runTests(t *testing.T, tests []Test) {
 						cse.Data,
 						cse.Description,
 					}
-					if err := sch.Validate(cse.Data); cse.Valid {
+					if err := ValidateJSON(sch, cse.Data); cse.Valid {
 						a.NoErrorf(err, f, args...)
 					} else {
 						a.Errorf(err, f, args...)
@@ -143,7 +143,7 @@ func TestParse(t *testing.T) {
 
 	tests := []struct {
 		data    string
-		want    *Schema
+		want    *Schema[jsonValue]
 		wantErr bool
 	}{
 		// Invalid JSON handling.

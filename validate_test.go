@@ -21,7 +21,7 @@ type benchData struct {
 
 type benchSchema struct {
 	Name   string
-	Schema *Schema
+	Schema *Schema[jsonValue]
 	Data   []benchData
 	Skip   bool
 }
@@ -67,7 +67,7 @@ func TestBenchSuite(t *testing.T) {
 			for _, data := range s.Data {
 				data := data
 				t.Run(data.Name, func(t *testing.T) {
-					require.NoError(t, s.Schema.Validate(data.Data))
+					require.NoError(t, ValidateJSON(s.Schema, data.Data))
 				})
 			}
 		})
@@ -90,7 +90,7 @@ func BenchmarkValidate(b *testing.B) {
 					b.ResetTimer()
 
 					for i := 0; i < b.N; i++ {
-						if err := s.Schema.Validate(data.Data); err != nil {
+						if err := ValidateJSON(s.Schema, data.Data); err != nil {
 							b.Fatal(err)
 						}
 					}
