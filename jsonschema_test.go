@@ -11,6 +11,8 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tdakkota/jsonschema/valueiter/jxvalue"
 )
 
 type testingT interface {
@@ -143,7 +145,7 @@ func TestParse(t *testing.T) {
 
 	tests := []struct {
 		data    string
-		want    *Schema[jsonValue]
+		want    *Schema[jxvalue.Value]
 		wantErr bool
 	}{
 		// Invalid JSON handling.

@@ -3,9 +3,11 @@ package jsonschema
 import (
 	"math/big"
 	"regexp"
+
+	"github.com/tdakkota/jsonschema/valueiter"
 )
 
-type patternProperty[V Value[V]] struct {
+type patternProperty[V valueiter.Value[V]] struct {
 	Regexp *regexp.Regexp
 	Schema *Schema[V]
 }
@@ -64,7 +66,7 @@ func (t typeSet) has(typ typeSet) bool {
 }
 
 type (
-	additional[V Value[V]] struct {
+	additional[V valueiter.Value[V]] struct {
 		Set    bool
 		Bool   bool
 		Schema *Schema[V]
@@ -75,14 +77,14 @@ func (a additional[V]) isSchema() bool {
 	return a.Set && a.Schema != nil
 }
 
-type schemaItems[V Value[V]] struct {
+type schemaItems[V valueiter.Value[V]] struct {
 	Set    bool
 	Object *Schema[V]
 	Array  []*Schema[V]
 }
 
 // Schema is a parsed schema structure.
-type Schema[V Value[V]] struct {
+type Schema[V valueiter.Value[V]] struct {
 	types  typeSet
 	format string
 

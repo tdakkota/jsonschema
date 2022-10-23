@@ -6,9 +6,11 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
+
+	"github.com/tdakkota/jsonschema/valueiter"
 )
 
-func validate[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validate[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.enum) > 0 || len(s.allOf) > 0 || len(s.oneOf) > 0 || len(s.anyOf) > 0 || s.not != nil {
 		if err := validateEnum(s, val, cmp); err != nil {
 			return errors.Wrap(err, "enum")
@@ -53,7 +55,7 @@ func validate[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) erro
 	return nil
 }
 
-func validateEnum[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateEnum[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.enum) == 0 {
 		return nil
 	}
@@ -70,7 +72,7 @@ func validateEnum[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) 
 	return errors.Errorf("%v is not present in enum", val)
 }
 
-func validateAllOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateAllOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	for i, schema := range s.allOf {
 		if err := validate(schema, val, cmp); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
@@ -79,7 +81,7 @@ func validateAllOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C)
 	return nil
 }
 
-func validateOneOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateOneOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.oneOf) == 0 {
 		return nil
 	}
@@ -99,7 +101,7 @@ func validateOneOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C)
 	return errors.New("must match at least once")
 }
 
-func validateAnyOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateAnyOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if len(s.anyOf) == 0 {
 		return nil
 	}
@@ -112,7 +114,7 @@ func validateAnyOf[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C)
 	return errors.New("must match at least once")
 }
 
-func validateNot[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateNot[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if s := s.not; s != nil {
 		if err := validate(s, val, cmp); err == nil {
 			return errors.New("must not match")
@@ -121,14 +123,14 @@ func validateNot[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) e
 	return nil
 }
 
-func checkType[V Value[V]](s *Schema[V], t typeSet) error {
+func checkType[V valueiter.Value[V]](s *Schema[V], t typeSet) error {
 	if !s.types.has(t) {
 		return errors.New("type is not allowed")
 	}
 	return nil
 }
 
-func validateString[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateString[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if err := checkType(s, stringType); err != nil {
 		return err
 	}
@@ -156,7 +158,7 @@ func validateString[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 	return nil
 }
 
-func validateNumber[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateNumber[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	hasNumber := s.types.has(numberType)
 
 	if hasNumber && !(s.minimum != nil || s.maximum != nil || s.multipleOf != nil) {
@@ -199,15 +201,15 @@ func validateNumber[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C
 	return nil
 }
 
-func validateNull[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateNull[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	return checkType(s, nullType)
 }
 
-func validateBool[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateBool[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	return checkType(s, booleanType)
 }
 
-func elemValidator[V Value[V]](s *Schema[V], idx int) (*Schema[V], error) {
+func elemValidator[V valueiter.Value[V]](s *Schema[V], idx int) (*Schema[V], error) {
 	// 5.3.1.2.  Conditions for successful validation
 	//
 	// If "items" is not present, or its value is an object, validation
@@ -234,7 +236,7 @@ func elemValidator[V Value[V]](s *Schema[V], idx int) (*Schema[V], error) {
 	return nil, errors.New("schema does not allow additionalItems")
 }
 
-func validateArray[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateArray[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if err := checkType(s, arrayType); err != nil {
 		return err
 	}
@@ -294,7 +296,7 @@ func validateArray[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C)
 	return nil
 }
 
-func validateObject[V Value[V], C ValueComparator[V]](s *Schema[V], val V, cmp C) error {
+func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema[V], val V, cmp C) error {
 	if err := checkType(s, objectType); err != nil {
 		return err
 	}
