@@ -62,17 +62,28 @@ func (j jsonValue) Str() string {
 }
 
 func (j jsonValue) Array(cb func(jsonValue) error) error {
-	return j.dec().Arr(func(d *jx.Decoder) error {
-		raw := errors.Must(d.Raw())
-		return cb(jsonValue{raw: raw})
-	})
+	dec := j.dec()
+	iter := errors.Must(dec.ArrIter())
+	for iter.Next() {
+		raw := errors.Must(dec.Raw())
+		if err := cb(jsonValue{raw: raw}); err != nil {
+			return err
+		}
+	}
+	return iter.Err()
 }
 
 func (j jsonValue) Object(cb func(key []byte, value jsonValue) error) error {
-	return j.dec().ObjBytes(func(d *jx.Decoder, key []byte) error {
-		raw := errors.Must(d.Raw())
-		return cb(key, jsonValue{raw: raw})
-	})
+	dec := j.dec()
+	iter := errors.Must(dec.ObjIter())
+	for iter.Next() {
+		key := iter.Key()
+		raw := errors.Must(dec.Raw())
+		if err := cb(key, jsonValue{raw: raw}); err != nil {
+			return err
+		}
+	}
+	return iter.Err()
 }
 
 var _ ValueComparator[jsonValue] = jsonComparator{}
@@ -84,5 +95,9 @@ func (c jsonComparator) Equal(a, b jsonValue) (bool, error) {
 }
 
 func ValidateJSON(s *Schema[jsonValue], data []byte) error {
-	return validate[jsonValue, jsonComparator](s, jsonValue{raw: data}, jsonComparator{})
+	raw, err := jx.DecodeBytes(data).Raw()
+	if err != nil {
+		return err
+	}
+	return validate[jsonValue, jsonComparator](s, jsonValue{raw: raw}, jsonComparator{})
 }
