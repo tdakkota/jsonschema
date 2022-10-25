@@ -11,8 +11,6 @@ import (
 
 	"github.com/go-faster/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/tdakkota/jsonschema/valueiter/jxvalue"
 )
 
 type testingT interface {
@@ -69,9 +67,6 @@ func runTests(t *testing.T, setName string, tests []Test) {
 			sch, err := Parse(test.Schema)
 			require.NoError(t, err)
 
-			ysch, err := ParseYAML(test.Schema)
-			require.NoError(t, err)
-
 			for caseN, cse := range test.Tests {
 				caseN := caseN
 				cse := cse
@@ -97,7 +92,7 @@ func runTests(t *testing.T, setName string, tests []Test) {
 							t.Skip(reason)
 							return
 						}
-						check(t, ValidateYAML(ysch, cse.Data))
+						check(t, ValidateYAML(sch, cse.Data))
 					})
 				})
 			}
@@ -170,7 +165,7 @@ func TestParse(t *testing.T) {
 
 	tests := []struct {
 		data    string
-		want    *Schema[jxvalue.Value]
+		want    *Schema
 		wantErr bool
 	}{
 		// Invalid JSON handling.

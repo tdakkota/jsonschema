@@ -2,6 +2,7 @@
 package valueiter
 
 import (
+	"encoding/json"
 	"math/big"
 
 	"github.com/go-faster/jx"
@@ -32,7 +33,11 @@ type Value[V any] interface {
 	Object(cb func(key []byte, value V) error) error
 }
 
-// ValueComparator compares two values.
+// ValueComparator defines comparator for two values.
+// Also, it defines enum comparator implementation interface.
 type ValueComparator[V Value[V]] interface {
+	// Contains returns true if value is in given json values slice.
+	Contains(s []json.RawMessage, contains V) (bool, error)
+	// Equal returns true if two values are equal.
 	Equal(a, b V) (bool, error)
 }

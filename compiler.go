@@ -6,51 +6,47 @@ import (
 	"regexp"
 
 	"github.com/go-faster/errors"
-
-	"github.com/tdakkota/jsonschema/valueiter"
 )
 
 // compiler parses JSON schemas.
-type compiler[V valueiter.Value[V]] struct {
-	doc         *document
-	remote      RemoteResolver
-	valueMapper func(json.RawMessage) (V, error)
+type compiler struct {
+	doc    *document
+	remote RemoteResolver
 
 	remotes  map[string]*document
-	refcache map[string]*Schema[V]
+	refcache map[string]*Schema
 }
 
 // newCompiler creates new compiler.
-func newCompiler[V valueiter.Value[V]](root *document, mapper func(json.RawMessage) (V, error)) *compiler[V] {
+func newCompiler(root *document) *compiler {
 	var loc string
 	if root.id != nil {
 		r := stripFragment(root.id)
 		loc = r.String()
 	}
-	return &compiler[V]{
-		doc:         root,
-		remote:      Remote{},
-		valueMapper: mapper,
+	return &compiler{
+		doc:    root,
+		remote: Remote{},
 		remotes: map[string]*document{
 			"":  root,
 			loc: root,
 		},
-		refcache: map[string]*Schema[V]{},
+		refcache: map[string]*Schema{},
 	}
 }
 
 // Compile compiles given RawSchema and returns compiled Schema.
 //
 // Do not modify RawSchema fields, Schema will reference them.
-func (p *compiler[V]) Compile(schema RawSchema) (*Schema[V], error) {
+func (p *compiler) Compile(schema RawSchema) (*Schema, error) {
 	return p.compile(schema, newResolveCtx(p.doc.id))
 }
 
-func (p *compiler[V]) compile(schema RawSchema, ctx *resolveCtx) (_ *Schema[V], err error) {
-	return p.compile1(schema, ctx, func(s *Schema[V]) {})
+func (p *compiler) compile(schema RawSchema, ctx *resolveCtx) (_ *Schema, err error) {
+	return p.compile1(schema, ctx, func(s *Schema) {})
 }
 
-func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Schema[V])) (_ *Schema[V], err error) {
+func (p *compiler) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Schema)) (_ *Schema, err error) {
 	if ref := schema.Ref; ref != "" {
 		s, err := p.resolve(ref, ctx)
 		if err != nil {
@@ -70,16 +66,12 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 		// TODO: support format validation
 		schema.Format = ""
 	}
-	enum := make([]V, len(schema.Enum))
+	enum := make([]json.RawMessage, len(schema.Enum))
 	for i, val := range schema.Enum {
-		mapped, err := p.valueMapper(val)
-		if err != nil {
-			return nil, errors.Wrapf(err, "parse enum[%d]", i)
-		}
-		enum[i] = mapped
+		enum[i] = append(json.RawMessage(nil), val...)
 	}
 
-	s := &Schema[V]{
+	s := &Schema{
 		types:                typeSet(0).set(schema.Type),
 		format:               schema.Format,
 		enum:                 enum,
@@ -90,16 +82,16 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 		minProperties:        parseMinMax(schema.MinProperties),
 		maxProperties:        parseMinMax(schema.MaxProperties),
 		required:             make(map[string]struct{}, len(schema.Required)),
-		properties:           make(map[string]*Schema[V], len(schema.Properties)),
-		patternProperties:    make([]patternProperty[V], 0, len(schema.PatternProperties)),
-		additionalProperties: additional[V]{},
+		properties:           make(map[string]*Schema, len(schema.Properties)),
+		patternProperties:    make([]patternProperty, 0, len(schema.PatternProperties)),
+		additionalProperties: additional{},
 		dependentRequired:    nil,
 		dependentSchemas:     nil,
 		minItems:             parseMinMax(schema.MinItems),
 		maxItems:             parseMinMax(schema.MaxItems),
 		uniqueItems:          schema.UniqueItems,
-		items:                schemaItems[V]{},
-		additionalItems:      additional[V]{},
+		items:                schemaItems{},
+		additionalItems:      additional{},
 		minimum:              nil,
 		exclusiveMinimum:     schema.ExclusiveMinimum,
 		maximum:              nil,
@@ -140,7 +132,7 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 				return err
 			}
 
-			s.patternProperties = append(s.patternProperties, patternProperty[V]{
+			s.patternProperties = append(s.patternProperties, patternProperty{
 				Regexp: pattern,
 				Schema: item,
 			})
@@ -177,7 +169,7 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 	{
 		dep := schema.Dependencies
 		if len(dep.Schemas) > 0 {
-			s.dependentSchemas = make(map[string]*Schema[V], len(dep.Schemas))
+			s.dependentSchemas = make(map[string]*Schema, len(dep.Schemas))
 			for field, schema := range dep.Schemas {
 				s.dependentSchemas[field], err = p.compile(schema, ctx)
 				if err != nil {
@@ -210,7 +202,7 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 	// TODO: how does it affect performance?
 	for _, many := range []struct {
 		name    string
-		to      *[]*Schema[V]
+		to      *[]*Schema
 		schemas []RawSchema
 	}{
 		{"allOf", &s.allOf, schema.AllOf},
@@ -254,8 +246,8 @@ func (p *compiler[V]) compile1(schema RawSchema, ctx *resolveCtx, save func(s *S
 	return s, nil
 }
 
-func (p *compiler[V]) compileMany(schemas []RawSchema, ctx *resolveCtx) ([]*Schema[V], error) {
-	result := make([]*Schema[V], 0, len(schemas))
+func (p *compiler) compileMany(schemas []RawSchema, ctx *resolveCtx) ([]*Schema, error) {
+	result := make([]*Schema, 0, len(schemas))
 	for i, schema := range schemas {
 		s, err := p.compile(schema, ctx)
 		if err != nil {

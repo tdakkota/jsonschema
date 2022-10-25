@@ -1,6 +1,7 @@
 package yamlxvalue
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -142,6 +143,27 @@ var _ valueiter.ValueComparator[Value] = Comparator{}
 
 // Comparator is Value comparator.
 type Comparator struct{}
+
+func (c Comparator) Contains(enum []json.RawMessage, val Value) (bool, error) {
+	// FIXME(tdakkota): this is dramatically slow.
+	for _, e := range enum {
+		var n yaml.Node
+		if err := yaml.Unmarshal(e, &n); err != nil {
+			return false, err
+		}
+
+		ok, err := yamlEqual(val.Node, &n)
+		if err != nil {
+			return true, errors.Wrapf(err, "compare %q and %v", e, val)
+		}
+
+		if ok {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
 
 // Equal implements ValueComparator interface.
 func (c Comparator) Equal(a, b Value) (bool, error) {
