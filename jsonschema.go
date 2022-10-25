@@ -11,7 +11,7 @@ import (
 )
 
 // Parse parses given JSON and compiles JSON Schema validator.
-func Parse(data []byte) (*Schema[jxvalue.Value], error) {
+func Parse(data []byte) (*Schema, error) {
 	var raw RawSchema
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -20,36 +20,11 @@ func Parse(data []byte) (*Schema[jxvalue.Value], error) {
 	if err != nil {
 		return nil, err
 	}
-	return newCompiler[jxvalue.Value](doc, func(raw json.RawMessage) (jxvalue.Value, error) {
-		return jxvalue.Value{
-			Raw: append(jx.Raw(nil), raw...),
-		}, nil
-	}).Compile(raw)
-}
-
-// ParseYAML parses given JSON and compiles JSON Schema validator.
-func ParseYAML(data []byte) (*Schema[yamlxvalue.Value], error) {
-	var raw RawSchema
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	doc, err := collectIDs(nil, data)
-	if err != nil {
-		return nil, err
-	}
-	return newCompiler[yamlxvalue.Value](doc, func(raw json.RawMessage) (yamlxvalue.Value, error) {
-		var n yaml.Node
-		if err := yaml.Unmarshal(raw, &n); err != nil {
-			return yamlxvalue.Value{}, err
-		}
-		return yamlxvalue.Value{
-			Node: &n,
-		}, nil
-	}).Compile(raw)
+	return newCompiler(doc).Compile(raw)
 }
 
 // ValidateJSON validates given JSON against given JSON Schema.
-func ValidateJSON(s *Schema[jxvalue.Value], data []byte) error {
+func ValidateJSON(s *Schema, data []byte) error {
 	raw, err := jx.DecodeBytes(data).Raw()
 	if err != nil {
 		return err
@@ -58,7 +33,7 @@ func ValidateJSON(s *Schema[jxvalue.Value], data []byte) error {
 }
 
 // ValidateYAML validates given YAML against given JSON Schema.
-func ValidateYAML(s *Schema[yamlxvalue.Value], data []byte) error {
+func ValidateYAML(s *Schema, data []byte) error {
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
 		return err

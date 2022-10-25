@@ -1,16 +1,10 @@
 package jsonschema
 
 import (
+	"encoding/json"
 	"math/big"
 	"regexp"
-
-	"github.com/tdakkota/jsonschema/valueiter"
 )
-
-type patternProperty[V valueiter.Value[V]] struct {
-	Regexp *regexp.Regexp
-	Schema *Schema[V]
-}
 
 type minMax int
 
@@ -66,52 +60,57 @@ func (t typeSet) has(typ typeSet) bool {
 }
 
 type (
-	additional[V valueiter.Value[V]] struct {
+	additional struct {
 		Set    bool
 		Bool   bool
-		Schema *Schema[V]
+		Schema *Schema
 	}
 )
 
-func (a additional[V]) isSchema() bool {
+func (a additional) isSchema() bool {
 	return a.Set && a.Schema != nil
 }
 
-type schemaItems[V valueiter.Value[V]] struct {
+type schemaItems struct {
 	Set    bool
-	Object *Schema[V]
-	Array  []*Schema[V]
+	Object *Schema
+	Array  []*Schema
+}
+
+type patternProperty struct {
+	Regexp *regexp.Regexp
+	Schema *Schema
 }
 
 // Schema is a parsed schema structure.
-type Schema[V valueiter.Value[V]] struct {
+type Schema struct {
 	types  typeSet
 	format string
 
-	enum []V
+	enum []json.RawMessage
 
 	// Schema composition.
-	allOf []*Schema[V]
-	anyOf []*Schema[V]
-	oneOf []*Schema[V]
-	not   *Schema[V]
+	allOf []*Schema
+	anyOf []*Schema
+	oneOf []*Schema
+	not   *Schema
 
 	// Object validators.
 	minProperties        minMax
 	maxProperties        minMax
 	required             map[string]struct{}
-	properties           map[string]*Schema[V]
-	patternProperties    []patternProperty[V]
-	additionalProperties additional[V]
+	properties           map[string]*Schema
+	patternProperties    []patternProperty
+	additionalProperties additional
 	dependentRequired    map[string][]string
-	dependentSchemas     map[string]*Schema[V]
+	dependentSchemas     map[string]*Schema
 
 	// Array validators.
 	minItems        minMax
 	maxItems        minMax
 	uniqueItems     bool
-	items           schemaItems[V]
-	additionalItems additional[V]
+	items           schemaItems
+	additionalItems additional
 
 	// Number validators.
 	// TODO: try to store small numbers as int64

@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/tdakkota/jsonschema/valueiter/jxvalue"
 )
 
 var (
@@ -23,7 +21,7 @@ type benchData struct {
 
 type benchSchema struct {
 	Name   string
-	Schema *Schema[jxvalue.Value]
+	Schema *Schema
 	Data   []benchData
 	Skip   bool
 }
