@@ -50,30 +50,55 @@ type Test struct {
 	Tests       []Case          `json:"tests"`
 }
 
-func runTests(t *testing.T, tests []Test) {
-	for i, test := range tests {
+func runTests(t *testing.T, setName string, tests []Test) {
+	type caseID struct {
+		setName string
+		testN   int
+		caseN   int
+	}
+	skipYAML := map[caseID]string{
+		{"maxLength", 1, 5}: "Test data contains invalid UTF-8, but yamlx returns error if data is not valid UTF-8",
+	}
+
+	for testN, test := range tests {
+		testN := testN
 		test := test
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Test%d", testN+1), func(t *testing.T) {
 			require.NoError(t, ValidateJSON(draft4, test.Schema))
 
 			sch, err := Parse(test.Schema)
 			require.NoError(t, err)
-			for i, cse := range test.Tests {
-				cse := cse
-				t.Run(fmt.Sprintf("Case%d", i+1), func(t *testing.T) {
-					a := require.New(t)
 
-					f := "Schema: %s,\nData: %s,\nDescription: %s"
-					args := []interface{}{
-						test.Schema,
-						cse.Data,
-						cse.Description,
+			ysch, err := ParseYAML(test.Schema)
+			require.NoError(t, err)
+
+			for caseN, cse := range test.Tests {
+				caseN := caseN
+				cse := cse
+				t.Run(fmt.Sprintf("Case%d", caseN+1), func(t *testing.T) {
+					check := func(t *testing.T, err error) {
+						f := "Schema: %s,\nData: %s,\nDescription: %s"
+						args := []interface{}{
+							test.Schema,
+							cse.Data,
+							cse.Description,
+						}
+						if cse.Valid {
+							require.NoErrorf(t, err, f, args...)
+						} else {
+							require.Errorf(t, err, f, args...)
+						}
 					}
-					if err := ValidateJSON(sch, cse.Data); cse.Valid {
-						a.NoErrorf(err, f, args...)
-					} else {
-						a.Errorf(err, f, args...)
-					}
+					t.Run("JSON", func(t *testing.T) {
+						check(t, ValidateJSON(sch, cse.Data))
+					})
+					t.Run("YAML", func(t *testing.T) {
+						if reason, ok := skipYAML[caseID{setName, testN + 1, caseN + 1}]; ok {
+							t.Skip(reason)
+							return
+						}
+						check(t, ValidateYAML(ysch, cse.Data))
+					})
 				})
 			}
 		})
@@ -96,7 +121,7 @@ func runSuite(t *testing.T, suite embed.FS, suiteRoot string) {
 			for _, set := range sets {
 				setName := set.Name()
 				testName := strings.TrimSuffix(setName, ".json")
-				t.Run(strings.TrimSuffix(setName, ".json"), func(t *testing.T) {
+				t.Run(testName, func(t *testing.T) {
 					if _, ok := skipSet[testName]; ok {
 						t.Skipf("%s not supported yet", testName)
 						return
@@ -106,7 +131,7 @@ func runSuite(t *testing.T, suite embed.FS, suiteRoot string) {
 					var tests []Test
 					require.NoError(t, json.Unmarshal(data, &tests))
 
-					runTests(t, tests)
+					runTests(t, testName, tests)
 				})
 			}
 		})
