@@ -12,7 +12,7 @@ import (
 	"github.com/tdakkota/jsonschema/valueiter"
 )
 
-var _ valueiter.Value[Value] = Value{}
+var _ valueiter.Value[Value, []byte, []byte] = Value{}
 
 // Value is valueiter.Value implementation for jx.
 type Value struct {

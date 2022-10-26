@@ -12,7 +12,7 @@ import (
 	"github.com/tdakkota/jsonschema/valueiter"
 )
 
-var _ valueiter.Value[Value] = Value{}
+var _ valueiter.Value[Value, string, string] = Value{}
 
 // Value is valueiter.Value implementation for yamlx.
 type Value struct {
@@ -102,9 +102,9 @@ func (v Value) Number() valueiter.Number {
 }
 
 // Str implements valueiter.Value.
-func (v Value) Str() []byte {
+func (v Value) Str() string {
 	n := resolveNodeOr(v.Node, v.Node)
-	return []byte(n.Value)
+	return n.Value
 }
 
 // Array implements valueiter.Value.
@@ -122,7 +122,7 @@ func (v Value) Array(cb func(Value) error) error {
 }
 
 // Object implements valueiter.Value.
-func (v Value) Object(cb func(key []byte, value Value) error) error {
+func (v Value) Object(cb func(key string, value Value) error) error {
 	n, ok := resolveNode(v.Node)
 	if !ok {
 		return errors.Errorf("node is invalid: %v", n)
@@ -132,7 +132,7 @@ func (v Value) Object(cb func(key []byte, value Value) error) error {
 	for i := 0; i < len(content); i += 2 {
 		key := content[i]
 		value := content[i+1]
-		if err := cb([]byte(key.Value), Value{Node: value}); err != nil {
+		if err := cb(key.Value, Value{Node: value}); err != nil {
 			return err
 		}
 	}

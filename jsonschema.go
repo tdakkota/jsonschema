@@ -29,7 +29,13 @@ func ValidateJSON(s *Schema, data []byte) error {
 	if err != nil {
 		return err
 	}
-	return validate(s, jxvalue.Value{Raw: raw}, jxvalue.Comparator{})
+	type (
+		Value      = jxvalue.Value
+		Comparator = jxvalue.Comparator
+		Str        = []byte
+		Key        = []byte
+	)
+	return validate[Value, Comparator, Str, Key](s, Value{Raw: raw}, Comparator{})
 }
 
 // ValidateYAML validates given YAML against given JSON Schema.
@@ -38,5 +44,11 @@ func ValidateYAML(s *Schema, data []byte) error {
 	if err := yaml.Unmarshal(data, &node); err != nil {
 		return err
 	}
-	return validate(s, yamlxvalue.Value{Node: &node}, yamlxvalue.Comparator{})
+	type (
+		Value      = yamlxvalue.Value
+		Comparator = yamlxvalue.Comparator
+		Str        = string
+		Key        = string
+	)
+	return validate[Value, Comparator, Str, Key](s, Value{Node: &node}, Comparator{})
 }

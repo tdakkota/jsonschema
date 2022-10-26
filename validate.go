@@ -2,7 +2,6 @@ package jsonschema
 
 import (
 	"fmt"
-	"unicode/utf8"
 
 	"github.com/go-faster/errors"
 	"github.com/go-faster/jx"
@@ -10,21 +9,25 @@ import (
 	"github.com/tdakkota/jsonschema/valueiter"
 )
 
-func validate[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validate[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if len(s.enum) > 0 || len(s.allOf) > 0 || len(s.oneOf) > 0 || len(s.anyOf) > 0 || s.not != nil {
-		if err := validateEnum(s, val, cmp); err != nil {
+		if err := validateEnum[V, C, Str, Key](s, val, cmp); err != nil {
 			return errors.Wrap(err, "enum")
 		}
-		if err := validateAllOf(s, val, cmp); err != nil {
+		if err := validateAllOf[V, C, Str, Key](s, val, cmp); err != nil {
 			return errors.Wrap(err, "allOf")
 		}
-		if err := validateOneOf(s, val, cmp); err != nil {
+		if err := validateOneOf[V, C, Str, Key](s, val, cmp); err != nil {
 			return errors.Wrap(err, "oneOf")
 		}
-		if err := validateAnyOf(s, val, cmp); err != nil {
+		if err := validateAnyOf[V, C, Str, Key](s, val, cmp); err != nil {
 			return errors.Wrap(err, "anyOf")
 		}
-		if err := validateNot(s, val, cmp); err != nil {
+		if err := validateNot[V, C, Str, Key](s, val, cmp); err != nil {
 			return errors.Wrap(err, "not")
 		}
 	}
@@ -35,17 +38,17 @@ func validate[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, v
 	)
 	switch tt {
 	case jx.String:
-		err = validateString(s, val, cmp)
+		err = validateString[V, C, Str, Key](s, val, cmp)
 	case jx.Number:
-		err = validateNumber(s, val, cmp)
+		err = validateNumber[V, C, Str, Key](s, val, cmp)
 	case jx.Null:
-		err = validateNull(s, val, cmp)
+		err = validateNull[V, C, Str, Key](s, val, cmp)
 	case jx.Bool:
-		err = validateBool(s, val, cmp)
+		err = validateBool[V, C, Str, Key](s, val, cmp)
 	case jx.Array:
-		err = validateArray(s, val, cmp)
+		err = validateArray[V, C, Str, Key](s, val, cmp)
 	case jx.Object:
-		err = validateObject(s, val, cmp)
+		err = validateObject[V, C, Str, Key](s, val, cmp)
 	default:
 		panic(fmt.Sprintf("unreachable: %q", tt))
 	}
@@ -55,7 +58,11 @@ func validate[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, v
 	return nil
 }
 
-func validateEnum[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateEnum[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if len(s.enum) == 0 {
 		return nil
 	}
@@ -69,23 +76,31 @@ func validateEnum[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schem
 	return errors.Errorf("%v is not present in enum", val)
 }
 
-func validateAllOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateAllOf[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	for i, schema := range s.allOf {
-		if err := validate(schema, val, cmp); err != nil {
+		if err := validate[V, C, Str, Key](schema, val, cmp); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
 		}
 	}
 	return nil
 }
 
-func validateOneOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateOneOf[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if len(s.oneOf) == 0 {
 		return nil
 	}
 
 	counter := 0
 	for _, schema := range s.oneOf {
-		if err := validate(schema, val, cmp); err == nil {
+		if err := validate[V, C, Str, Key](schema, val, cmp); err == nil {
 			if counter != 0 {
 				return errors.New("must match exactly once")
 			}
@@ -98,22 +113,30 @@ func validateOneOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sche
 	return errors.New("must match at least once")
 }
 
-func validateAnyOf[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateAnyOf[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if len(s.anyOf) == 0 {
 		return nil
 	}
 
 	for _, schema := range s.anyOf {
-		if err := validate(schema, val, cmp); err == nil {
+		if err := validate[V, C, Str, Key](schema, val, cmp); err == nil {
 			return nil
 		}
 	}
 	return errors.New("must match at least once")
 }
 
-func validateNot[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateNot[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if s := s.not; s != nil {
-		if err := validate(s, val, cmp); err == nil {
+		if err := validate[V, C, Str, Key](s, val, cmp); err == nil {
 			return errors.New("must not match")
 		}
 	}
@@ -127,7 +150,11 @@ func checkType(s *Schema, t typeSet) error {
 	return nil
 }
 
-func validateString[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateString[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if err := checkType(s, stringType); err != nil {
 		return err
 	}
@@ -141,7 +168,7 @@ func validateString[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 		panic("unreachable")
 	}
 	if s.minLength.IsSet() || s.maxLength.IsSet() {
-		count := utf8.RuneCount(str)
+		count := runeCount(str)
 		if s.minLength.IsSet() && count < int(s.minLength) {
 			return errors.Errorf("length is smaller than %d", s.minLength)
 		}
@@ -149,13 +176,17 @@ func validateString[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 			return errors.Errorf("length is bigger than %d", s.maxLength)
 		}
 	}
-	if s.pattern != nil && !s.pattern.Match(str) {
-		return errors.Errorf("does not match pattern %s", s.pattern)
+	if pattern := s.pattern; pattern != nil && !regexpMatch(pattern, str) {
+		return errors.Errorf("does not match pattern %s", pattern)
 	}
 	return nil
 }
 
-func validateNumber[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateNumber[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	hasNumber := s.types.has(numberType)
 
 	if hasNumber && !(s.minimum != nil || s.maximum != nil || s.multipleOf != nil) {
@@ -198,11 +229,19 @@ func validateNumber[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 	return nil
 }
 
-func validateNull[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateNull[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	return checkType(s, nullType)
 }
 
-func validateBool[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateBool[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	return checkType(s, booleanType)
 }
 
@@ -233,7 +272,11 @@ func elemValidator(s *Schema, idx int) (*Schema, error) {
 	return nil, errors.New("schema does not allow additionalItems")
 }
 
-func validateArray[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateArray[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if err := checkType(s, arrayType); err != nil {
 		return err
 	}
@@ -256,7 +299,7 @@ func validateArray[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sche
 			return err
 		}
 		if sch != nil {
-			if err := validate(sch, val, cmp); err != nil {
+			if err := validate[V, C, Str, Key](sch, val, cmp); err != nil {
 				return err
 			}
 		}
@@ -293,7 +336,11 @@ func validateArray[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sche
 	return nil
 }
 
-func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Schema, val V, cmp C) error {
+func validateObject[
+	V valueiter.Value[V, Str, Key],
+	C valueiter.ValueComparator[V],
+	Str, Key valueiter.ByteSeq,
+](s *Schema, val V, cmp C) error {
 	if err := checkType(s, objectType); err != nil {
 		return err
 	}
@@ -325,14 +372,14 @@ func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 			required = map[string]struct{}{}
 		}
 		rootval := val
-		if err := val.Object(func(k []byte, _ V) error {
+		if err := val.Object(func(k Key, _ V) error {
 			if r, ok := s.dependentRequired[string(k)]; ok {
 				for _, value := range r {
 					required[value] = struct{}{}
 				}
 			}
 			if ds, ok := s.dependentSchemas[string(k)]; ok {
-				if err := validate(ds, rootval, cmp); err != nil {
+				if err := validate[V, C, Str, Key](ds, rootval, cmp); err != nil {
 					return errors.Wrapf(err, "dependent %q", k)
 				}
 			}
@@ -342,7 +389,7 @@ func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 		}
 	}
 
-	if err := val.Object(func(k []byte, val V) (rerr error) {
+	if err := val.Object(func(k Key, val V) (rerr error) {
 		defer func() {
 			i++
 			if rerr != nil {
@@ -354,15 +401,15 @@ func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 		prop, ok := s.properties[string(k)]
 		var matched bool
 		for _, p := range s.patternProperties {
-			if p.Regexp.Match(k) {
+			if regexpMatch(p.Regexp, k) {
 				matched = true
-				if err := validate(p.Schema, val, cmp); err != nil {
+				if err := validate[V, C, Str, Key](p.Schema, val, cmp); err != nil {
 					return errors.Wrapf(err, "pattern %q", p.Regexp)
 				}
 			}
 		}
 		if ok {
-			return validate(prop, val, cmp)
+			return validate[V, C, Str, Key](prop, val, cmp)
 		}
 
 		if matched {
@@ -374,10 +421,10 @@ func validateObject[V valueiter.Value[V], C valueiter.ValueComparator[V]](s *Sch
 			return errors.New("additional properties are not allowed")
 		}
 		if s := ap.Schema; s != nil {
-			if err := validate(s, val, cmp); err != nil {
+			if err := validate[V, C, Str, Key](s, val, cmp); err != nil {
 				return errors.Wrap(err, "additionalProperties")
 			}
-			return validate(s, val, cmp)
+			return validate[V, C, Str, Key](s, val, cmp)
 		}
 
 		return nil
