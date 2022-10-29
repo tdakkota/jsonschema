@@ -6,11 +6,6 @@ import (
 	"regexp"
 )
 
-type patternProperty struct {
-	Regexp *regexp.Regexp
-	Schema *Schema
-}
-
 type minMax int
 
 func (m minMax) IsSet() bool {
@@ -70,18 +65,21 @@ type (
 		Bool   bool
 		Schema *Schema
 	}
-	additionalProperties = additional
-	additionalItems      = additional
 )
 
 func (a additional) isSchema() bool {
 	return a.Set && a.Schema != nil
 }
 
-type items struct {
+type schemaItems struct {
 	Set    bool
 	Object *Schema
 	Array  []*Schema
+}
+
+type patternProperty struct {
+	Regexp *regexp.Regexp
+	Schema *Schema
 }
 
 // Schema is a parsed schema structure.
@@ -89,8 +87,7 @@ type Schema struct {
 	types  typeSet
 	format string
 
-	enum    []json.RawMessage
-	enumMap map[string]struct{}
+	enum []json.RawMessage
 
 	// Schema composition.
 	allOf []*Schema
@@ -104,7 +101,7 @@ type Schema struct {
 	required             map[string]struct{}
 	properties           map[string]*Schema
 	patternProperties    []patternProperty
-	additionalProperties additionalProperties
+	additionalProperties additional
 	dependentRequired    map[string][]string
 	dependentSchemas     map[string]*Schema
 
@@ -112,8 +109,8 @@ type Schema struct {
 	minItems        minMax
 	maxItems        minMax
 	uniqueItems     bool
-	items           items
-	additionalItems additionalItems
+	items           schemaItems
+	additionalItems additional
 
 	// Number validators.
 	// TODO: try to store small numbers as int64
