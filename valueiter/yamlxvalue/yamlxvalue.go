@@ -19,26 +19,31 @@ type Value struct {
 	Node *yaml.Node
 }
 
-func resolveNode(n *yaml.Node) (*yaml.Node, bool) {
+func resolveNode(n *yaml.Node) (_ *yaml.Node, reason string) {
 	if n == nil {
-		return nil, false
+		return nil, "node is nil"
 	}
 	switch n.Kind {
 	case yaml.DocumentNode:
 		if len(n.Content) == 0 {
-			return nil, false
+			return nil, "document node content is empty"
 		}
 		return resolveNode(n.Content[0])
 	case yaml.AliasNode:
 		return resolveNode(n.Alias)
+	case yaml.MappingNode:
+		if len(n.Content)%2 != 0 {
+			return nil, "mapping node content length is not even"
+		}
+		fallthrough
 	default:
-		return n, true
+		return n, ""
 	}
 }
 
 func resolveNodeOr(n, fallback *yaml.Node) *yaml.Node {
-	n, ok := resolveNode(n)
-	if !ok {
+	n, _ = resolveNode(n)
+	if n == nil {
 		return fallback
 	}
 	return n
@@ -54,8 +59,8 @@ func parseRat(value string) (*big.Rat, error) {
 
 // Type implements valueiter.Value.
 func (v Value) Type() jx.Type {
-	n, ok := resolveNode(v.Node)
-	if !ok {
+	n, _ := resolveNode(v.Node)
+	if n == nil {
 		return jx.Invalid
 	}
 	switch n.Kind {
@@ -109,9 +114,9 @@ func (v Value) Str() string {
 
 // Array implements valueiter.Value.
 func (v Value) Array(cb func(Value) error) error {
-	n, ok := resolveNode(v.Node)
-	if !ok {
-		return errors.Errorf("node is invalid: %v", n)
+	n, reason := resolveNode(v.Node)
+	if n == nil {
+		return errors.Errorf("node is invalid: %s", reason)
 	}
 	for _, n := range n.Content {
 		if err := cb(Value{Node: n}); err != nil {
@@ -123,9 +128,9 @@ func (v Value) Array(cb func(Value) error) error {
 
 // Object implements valueiter.Value.
 func (v Value) Object(cb func(key string, value Value) error) error {
-	n, ok := resolveNode(v.Node)
-	if !ok {
-		return errors.Errorf("node is invalid: %v", n)
+	n, reason := resolveNode(v.Node)
+	if n == nil {
+		return errors.Errorf("node is invalid: %s", reason)
 	}
 
 	content := n.Content
@@ -171,13 +176,13 @@ func (c Comparator) Equal(a, b Value) (bool, error) {
 }
 
 func yamlEqual(a, b *yaml.Node) (bool, error) {
-	a, ok := resolveNode(a)
-	if !ok {
-		return false, errors.Errorf("left node is invalid: %v", a)
+	a, reason := resolveNode(a)
+	if reason != "" {
+		return false, errors.Errorf("left node is invalid: %s", reason)
 	}
-	b, ok = resolveNode(b)
-	if !ok {
-		return false, errors.Errorf("right node is invalid: %v", b)
+	b, reason = resolveNode(b)
+	if reason != "" {
+		return false, errors.Errorf("right node is invalid: %s", reason)
 	}
 
 	switch {
