@@ -55,7 +55,7 @@ func runTests(t *testing.T, setName string, tests []Test) {
 		caseN   int
 	}
 	skipYAML := map[caseID]string{
-		{"maxLength", 1, 5}: "Test data contains invalid UTF-8, but yamlx returns error if data is not valid UTF-8",
+		{"maxLength", 1, 5}: "Test data contains invalid UTF-8, but yaml returns error if data is not valid UTF-8",
 	}
 
 	for testN, test := range tests {

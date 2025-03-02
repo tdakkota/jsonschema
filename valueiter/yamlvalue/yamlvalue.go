@@ -1,4 +1,4 @@
-package yamlxvalue
+package yamlvalue
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 
 var _ valueiter.Value[Value, string, string] = Value{}
 
-// Value is valueiter.Value implementation for yamlx.
+// Value is valueiter.Value implementation for yaml.
 type Value struct {
 	Node *yaml.Node
 }

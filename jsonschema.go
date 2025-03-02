@@ -7,7 +7,7 @@ import (
 	"github.com/go-faster/yaml"
 
 	"github.com/tdakkota/jsonschema/valueiter/jxvalue"
-	"github.com/tdakkota/jsonschema/valueiter/yamlxvalue"
+	"github.com/tdakkota/jsonschema/valueiter/yamlvalue"
 )
 
 // Parse parses given JSON and compiles JSON Schema validator.
@@ -45,8 +45,8 @@ func ValidateYAML(s *Schema, data []byte) error {
 		return err
 	}
 	type (
-		Value      = yamlxvalue.Value
-		Comparator = yamlxvalue.Comparator
+		Value      = yamlvalue.Value
+		Comparator = yamlvalue.Comparator
 		Str        = string
 		Key        = string
 	)

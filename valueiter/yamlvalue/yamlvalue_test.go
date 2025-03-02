@@ -1,4 +1,4 @@
-package yamlxvalue
+package yamlvalue
 
 import (
 	"fmt"
