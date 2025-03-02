@@ -1,6 +1,7 @@
 package jsonschema
 
 import (
+	"encoding/json"
 	"math/big"
 	"regexp"
 
@@ -65,29 +66,32 @@ func (p *compiler) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Sche
 		// TODO: support format validation
 		schema.Format = ""
 	}
+	enum := make([]json.RawMessage, len(schema.Enum))
+	for i, val := range schema.Enum {
+		enum[i] = append(json.RawMessage(nil), val...)
+	}
 
 	s := &Schema{
 		types:                typeSet(0).set(schema.Type),
 		format:               schema.Format,
-		enum:                 schema.Enum,
-		enumMap:              make(map[string]struct{}, len(schema.Enum)),
+		enum:                 enum,
 		allOf:                nil,
 		anyOf:                nil,
 		oneOf:                nil,
 		not:                  nil,
 		minProperties:        parseMinMax(schema.MinProperties),
 		maxProperties:        parseMinMax(schema.MaxProperties),
-		required:             map[string]struct{}{},
-		properties:           map[string]*Schema{},
-		patternProperties:    nil,
-		additionalProperties: additionalProperties{},
+		required:             make(map[string]struct{}, len(schema.Required)),
+		properties:           make(map[string]*Schema, len(schema.Properties)),
+		patternProperties:    make([]patternProperty, 0, len(schema.PatternProperties)),
+		additionalProperties: additional{},
 		dependentRequired:    nil,
 		dependentSchemas:     nil,
 		minItems:             parseMinMax(schema.MinItems),
 		maxItems:             parseMinMax(schema.MaxItems),
 		uniqueItems:          schema.UniqueItems,
-		items:                items{},
-		additionalItems:      additionalItems{},
+		items:                schemaItems{},
+		additionalItems:      additional{},
 		minimum:              nil,
 		exclusiveMinimum:     schema.ExclusiveMinimum,
 		maximum:              nil,
@@ -98,10 +102,6 @@ func (p *compiler) compile1(schema RawSchema, ctx *resolveCtx, save func(s *Sche
 		pattern:              nil,
 	}
 	save(s)
-
-	for _, value := range schema.Enum {
-		s.enumMap[string(value)] = struct{}{}
-	}
 
 	for _, field := range schema.Required {
 		// See https://datatracker.ietf.org/doc/html/draft-fge-json-schema-validation-00#section-5.4.3.

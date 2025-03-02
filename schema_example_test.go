@@ -19,13 +19,14 @@ func ExampleParse() {
 		panic(err)
 	}
 
-	if err := schema.Validate(
+	if err := jsonschema.ValidateJSON(
+		schema,
 		[]byte(`{ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" }`),
 	); err != nil {
 		panic(err)
 	}
 
-	fmt.Println(schema.Validate([]byte(`{"number": "1600"}`)))
+	fmt.Println(jsonschema.ValidateJSON(schema, []byte(`{"number": "1600"}`)))
 	// Output:
 	// object: "number": string: type is not allowed
 }
